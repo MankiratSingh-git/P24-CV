@@ -74,7 +74,7 @@ Task & Semi-supervised video action recognition \\
 Dataset & UCF-101 \\
 Primary backbone & 3D-ResNet-18 \\
 Core method & FixMatch-style consistency-based pseudo-labeling \\
-Planned extension & None. \\
+Planned extension & Augmentation-strength and confidence-threshold ablations with pseudo-label precision/coverage tracking (Sec.~4). \\
 \end{tabularx}
 \vspace{0.8cm}
 \rule{\textwidth}{0.6pt}\\[0.7cm]
@@ -162,7 +162,7 @@ Sohn et al. introduce FixMatch as a combination of pseudo-labeling and consisten
 
 The original FixMatch work evaluates image-classification benchmarks, not UCF-101 video clips. Consequently, this project adapts its training principle to clips and uses a video-specific backbone and transformations. The original paper's augmentation policies cannot be transferred mechanically to video: spatial transformations should be consistent across frames, and transformations must not destroy action-defining temporal evidence.
 
-F$^2$-FixMatch has also explored frame- and feature-level augmentation for semi-supervised action recognition; it is included here only as related work and will not be reproduced in this project.
+F$^2$-FixMatch \cite{f2fixmatch} reports stronger results on frame- and feature-level augmentation for semi-supervised action recognition, using the same 3D-ResNet-18 backbone and 8-frame clips on UCF-101 at matching label fractions (including 10\%). Its reported diagnostic of pseudo-label quality is a single pseudo-label accuracy curve over training epochs (their Figure 3, comparing their Multihead Pseudo-Labeling scheme against Traditional Pseudo-Labeling); it does not decompose this into separate precision and coverage statistics, and does not report an acceptance-rate/coverage curve. This project's precision--coverage ablation (Section~4) is therefore a diagnostic that complements rather than duplicates their reported evaluation. F$^2$-FixMatch's architecture is substantially heavier than a single-modality FixMatch baseline -- it combines a bi-modal (RGB and temporal-gradient) input with a Progressive Augmentation mechanism and a three-term Multihead Pseudo-Labeling loss -- so this project treats it as related work motivating the augmentation-quality question rather than as a system to reproduce or extend; the FixMatch-style pipeline here is implemented independently at the scale appropriate for this course's compute budget.
 
 % ------------------------------ 4 NOVELTY ------------------------------
 \section{Scope and Proposed Contribution}
@@ -171,9 +171,12 @@ The core algorithmic components are established methods; this proposal does not 
 \begin{enumerate}[label=\textbf{N\arabic*.}]
   \item \textbf{Matched label-budget comparison.} Compare a 10\%-label supervised baseline with FixMatch-style training using the same labelled subset, split, backbone, and test protocol.
   \item \textbf{Quality-aware augmentation ablation.} Report both pseudo-label precision and coverage, not only final accuracy, to find the trade-off between accepting more examples and accepting more incorrect labels.
+  \item \textbf{Threshold transferability test.} The standard FixMatch confidence threshold ($\tau=0.95$) is tuned for image classification; F$^2$-FixMatch \cite{f2fixmatch} reports that a substantially lower threshold ($\tau=0.3$) performs better for video, reasoning that a high threshold starves early training of accepted pseudo-labels. This project tests both thresholds under its own matched protocol and investigates the mechanism directly: pseudo-label coverage and precision will be tracked separately at each threshold and across training epochs, to confirm or complicate the starvation explanation with evidence from this backbone and dataset rather than taking the published claim at face value. This is a new ablation beyond what the original FixMatch paper (evaluated only on images) or the problem statement's baseline outcome calls for.
 \end{enumerate}
 
-The result remains useful if stronger augmentation does not improve performance. A controlled negative result can identify when perturbations harm action semantics, reduce pseudo-label precision, or create a precision--coverage trade-off.
+Items N2 and N3 are reported separately because they probe different causes of pseudo-label quality change: N2 varies the strength of the augmentation policy, while N3 varies the acceptance threshold. Together they distinguish whether a given change in precision or coverage comes from how hard the augmented view is to classify consistently, or from how permissive the model is in accepting its own predictions.
+
+The result remains useful if stronger augmentation does not improve performance, or if the published threshold recommendation does not transfer to this setting. A controlled negative result can identify when perturbations harm action semantics, reduce pseudo-label precision, create a precision--coverage trade-off, or show that threshold behaviour depends on training stage in ways the single-dataset literature does not capture.
 
 % ------------------------------ 5 DATA ------------------------------
 \section{Dataset and Experimental Protocol}
@@ -209,7 +212,7 @@ Spatial transformations will be sampled once per clip and applied consistently a
 % ------------------------------ 6 METHODS ------------------------------
 \section{Methodology}
 \subsection{Backbone and baseline models}
-A 3D-ResNet-18 will be used as the primary backbone. This model is selected as a compact video architecture. The same backbone and clip preprocessing will be used for the principal comparisons.
+A 3D-ResNet-18 will be used as the primary backbone, following the architecture and public implementation of Hara et al. \cite{hara3dresnet}. This model is selected as a compact video architecture. The same backbone and clip preprocessing will be used for the principal comparisons.
 
 
 \begin{table}[H]
@@ -243,7 +246,7 @@ For confidence threshold $\tau$, the acceptance mask is
 \[
 m=\mathbb{1}[q\geq\tau].
 \]
-A starting threshold of $\tau=0.95$ will be tested, reflecting a common FixMatch configuration; it will be fixed or tuned only using the validation protocol, never the test set.
+A starting threshold of $\tau=0.95$ will be tested, reflecting a common FixMatch configuration for image classification; however, F$^2$-FixMatch \cite{f2fixmatch} reports that a lower threshold ($\tau=0.3$) performs better for video, reasoning that a higher threshold starves early training of accepted pseudo-labels. Both $\tau=0.95$ and $\tau=0.3$ will therefore be tried on the validation set, and the threshold will be fixed or tuned only using the validation protocol, never the test set.
 
 For a labelled batch $\{(x_i,y_i)\}_{i=1}^{B_l}$, the supervised loss is
 \[
@@ -464,6 +467,12 @@ K. Soomro, A. R. Zamir, and M. Shah,
 \newblock CRCV, University of Central Florida, 2012.
 \newblock Dataset page: \url{https://www.crcv.ucf.edu/data/UCF101.php}.
 \newblock Technical report: \url{https://arxiv.org/abs/1212.0402}.
+
+\bibitem{hara3dresnet}
+K. Hara, H. Kataoka, and Y. Satoh,
+\newblock ``Can Spatiotemporal 3D CNNs Retrace the History of 2D CNNs and ImageNet?''
+\newblock in \emph{IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2018.
+\newblock Code: \url{https://github.com/kenshohara/3D-ResNets-PyTorch}.
 
 \end{thebibliography}
 
