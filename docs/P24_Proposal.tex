@@ -1,0 +1,475 @@
+\documentclass[11pt,a4paper]{article}
+
+% ------------------------------------------------------------------
+\usepackage[a4paper,margin=0.82in,headheight=15pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,tabularx,array,longtable,multirow}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[most]{tcolorbox}
+\usepackage{url}
+
+\definecolor{navy}{HTML}{000000}
+\definecolor{blue}{HTML}{D9D9D9}
+\definecolor{pale}{HTML}{F2F2F2}
+\definecolor{gold}{HTML}{D9D9D9}
+\definecolor{darkgray}{HTML}{404040}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=navy,
+  citecolor=navy,
+  urlcolor=navy,
+  pdftitle={P24: Semi-Supervised Video Action Recognition with Consistency-Based Pseudo-Labeling},
+  pdfauthor={Mankirat Singh and Vanshika Garg}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small P24 -- Semi-Supervised Video Action Recognition}
+\rhead{\small Project Proposal}
+\cfoot{\thepage}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlist[itemize]{leftmargin=1.5em,itemsep=2pt,topsep=3pt}
+\setlist[enumerate]{leftmargin=1.7em,itemsep=3pt,topsep=3pt}
+\titleformat{\section}{\Large\bfseries\color{navy}}{\thesection}{0.65em}{}
+\titleformat{\subsection}{\large\bfseries\color{darkgray}}{\thesubsection}{0.6em}{}
+\renewcommand{\arraystretch}{1.18}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\newtcolorbox{keybox}[1][]{
+  colback=pale,colframe=navy,boxrule=0.7pt,arc=2mm,
+  left=2.5mm,right=2.5mm,top=1.8mm,bottom=1.8mm,#1
+}
+\newtcolorbox{quotebox}[1][]{
+  colback=gold!35,colframe=gold!80!black,boxrule=0.5pt,arc=1.5mm,
+  left=2.5mm,right=2.5mm,top=1.5mm,bottom=1.5mm,#1
+}
+
+\begin{document}
+
+% ------------------------------ TITLE ------------------------------
+\begin{titlepage}
+\thispagestyle{empty}
+\vspace*{0.4cm}
+\begin{center}
+{\large\textsc{Project Proposal}}\\[0.8cm]
+{\Huge\bfseries\color{navy} Learning Video Actions with Only 10\% Labels}\\[0.25cm]
+{\LARGE Consistency-Based Pseudo-Labeling on UCF-101}\\[0.9cm]
+\rule{\textwidth}{1.2pt}\\[0.6cm]
+\begin{tabularx}{0.94\textwidth}{>{\bfseries}L{3.2cm}Y}
+Problem ID & P24 \\
+Task & Semi-supervised video action recognition \\
+Dataset & UCF-101 \\
+Primary backbone & 3D-ResNet-18 \\
+Core method & FixMatch-style consistency-based pseudo-labeling \\
+Planned extension & None. \\
+\end{tabularx}
+\vspace{0.8cm}
+\rule{\textwidth}{0.6pt}\\[0.7cm]
+{\Large\bfseries Team Members}\\[0.35cm]
+\begin{tabular}{ll}
+\textbf{Mankirat Singh} & 1024160002\\[0.2cm]
+\textbf{Vanshika Garg} & 102430092
+\end{tabular}
+
+\vfill
+\begin{keybox}
+\textbf{Central question.} Can unlabelled videos improve action recognition when only 10\% of the available training labels are used, and how does the strength of video augmentation affect the quality of the pseudo-labels and the final Top-1 accuracy?
+\end{keybox}
+\vspace{0.4cm}
+{\small Prepared with reference to the UCF-101 dataset and the FixMatch literature.}
+\end{center}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ------------------------------ SUMMARY ------------------------------
+\section*{Project at a Glance}
+\addcontentsline{toc}{section}{Project at a Glance}
+\begin{tabularx}{\textwidth}{L{3.1cm}Y}
+\toprule
+\textbf{Item} & \textbf{Plan} \\
+\midrule
+Dataset & UCF-101, an action-recognition dataset with 101 action classes \cite{ucf101}. \\
+Label budget & 10\% of training videos labelled; remaining 90\% used as unlabelled data in the semi-supervised setting. \\
+Backbone & 3D-ResNet-18, selected as a compact video model. \\
+Main comparison & Fully supervised training using all training labels; supervised training using 10\% labels; FixMatch-style training using 10\% labels plus unlabelled videos. \\
+Primary metric & Top-1 classification accuracy on a held-out test split. \\
+Ablation & Compare augmentation strengths and report pseudo-label precision, pseudo-label coverage, and final Top-1 accuracy. \\
+Scope boundary & The project is limited to FixMatch-style semi-supervised learning and an augmentation ablation. \\
+Expected output & Reproducible training pipeline, result tables and plots, augmentation ablation, and a written analysis of limitations. \\
+\bottomrule
+\end{tabularx}
+
+% ------------------------------ 1 MOTIVATION ------------------------------
+\section{Motivation and Central Idea}
+Video action recognition systems are commonly trained with labelled clips, but manually annotating video is costly: an action may require temporal context to identify, and a video collection can contain thousands of clips. At the same time, unlabelled videos are often easier to collect than to annotate. Semi-supervised learning attempts to use both sources: a small labelled subset supplies ground-truth supervision, while the unlabelled subset contributes additional training signals.
+
+UCF-101 is a suitable benchmark for this investigation because it contains 101 human-action categories and is widely used in action-recognition research \cite{ucf101}. The project will use a 3D-ResNet-18 backbone, which processes short video clips and learns spatial and temporal features. The primary experiment will expose the training algorithm to labels for only 10\% of the training videos.
+
+\begin{keybox}
+\textbf{Central idea.} Establish controlled supervised baselines first, then test whether confidence-filtered pseudo-labels and consistency between weakly and strongly augmented views improve recognition. Rather than reporting accuracy alone, the study will measure the precision and coverage of the pseudo-labels accepted during training.
+\end{keybox}
+
+The proposed core method is based on FixMatch \cite{fixmatch}. FixMatch generates a pseudo-label from a weakly augmented unlabelled example, retains it when its confidence exceeds a threshold, and trains the model to predict that pseudo-label for a strongly augmented view.
+
+
+
+% ------------------------------ 2 OBJECTIVES ------------------------------
+\section{Objectives}
+\subsection{Primary objectives}
+\begin{enumerate}[label=\textbf{O\arabic*.}]
+  \item \textbf{Establish reference performance.} Train and evaluate a 3D-ResNet-18 with all labels in the training partition and with only a class-stratified 10\% labelled subset.
+  \item \textbf{Evaluate semi-supervised learning.} Implement a FixMatch-style training loop that uses the labelled subset and the remaining training videos as unlabelled examples.
+  \item \textbf{Measure augmentation effects.} Compare controlled weak/strong augmentation policies and determine how augmentation strength affects pseudo-label quality and final Top-1 accuracy.
+  \item \textbf{Evaluate pseudo-label quality.} Report precision and coverage for accepted pseudo-labels using labels withheld from the training algorithm and used only for offline evaluation.
+\end{enumerate}
+
+\subsection{Secondary objectives}
+\begin{enumerate}[label=\textbf{O\arabic*.},start=5]
+  \item Record training behaviour, including supervised and unsupervised losses, confidence distributions, pseudo-label acceptance rate, and validation accuracy.
+  \item Document reproducibility, limitations, class-wise errors, and differences between the project's protocol and published benchmarks.
+\end{enumerate}
+
+\subsection{Questions the experiments will answer}
+\begin{tabularx}{\textwidth}{L{1.1cm}Y Y}
+\toprule
+\textbf{ID} & \textbf{Question} & \textbf{Evidence} \\
+\midrule
+Q1 & Does using unlabelled videos improve over supervised training with 10\% labels? & Top-1 accuracy for 10\% supervised versus FixMatch-style training. \\
+Q2 & How close does the semi-supervised model get to the fully supervised reference? & Accuracy gap between the semi-supervised result and the 100\%-labelled result. \\
+Q3 & Does stronger augmentation improve pseudo-label precision, coverage, or final accuracy? & Augmentation ablation with precision, coverage, and Top-1 accuracy. \\
+\bottomrule
+\end{tabularx}
+
+% ------------------------------ 3 RELATED WORK ------------------------------
+\section{Related Work}
+\subsection{FixMatch: confidence and consistency}
+Sohn et al. introduce FixMatch as a combination of pseudo-labeling and consistency regularization \cite{fixmatch}. The model predicts a class distribution for a weakly augmented unlabelled example. If the maximum class probability is above a threshold, the corresponding hard label is used to supervise the model's prediction on a strongly augmented version. The objective combines supervised cross-entropy on labelled examples with a confidence-masked unsupervised cross-entropy loss.
+
+The original FixMatch work evaluates image-classification benchmarks, not UCF-101 video clips. Consequently, this project adapts its training principle to clips and uses a video-specific backbone and transformations. The original paper's augmentation policies cannot be transferred mechanically to video: spatial transformations should be consistent across frames, and transformations must not destroy action-defining temporal evidence.
+
+F$^2$-FixMatch has also explored frame- and feature-level augmentation for semi-supervised action recognition; it is included here only as related work and will not be reproduced in this project.
+
+% ------------------------------ 4 NOVELTY ------------------------------
+\section{Scope and Proposed Contribution}
+The core algorithmic components are established methods; this proposal does not claim that FixMatch or video augmentation is new. The intended contribution is a controlled empirical study of the relationship between augmentation strength, pseudo-label quality, and final video action-recognition accuracy at a fixed 10\% label budget.
+
+\begin{enumerate}[label=\textbf{N\arabic*.}]
+  \item \textbf{Matched label-budget comparison.} Compare a 10\%-label supervised baseline with FixMatch-style training using the same labelled subset, split, backbone, and test protocol.
+  \item \textbf{Quality-aware augmentation ablation.} Report both pseudo-label precision and coverage, not only final accuracy, to find the trade-off between accepting more examples and accepting more incorrect labels.
+\end{enumerate}
+
+The result remains useful if stronger augmentation does not improve performance. A controlled negative result can identify when perturbations harm action semantics, reduce pseudo-label precision, or create a precision--coverage trade-off.
+
+% ------------------------------ 5 DATA ------------------------------
+\section{Dataset and Experimental Protocol}
+\subsection{UCF-101}
+The primary dataset is UCF-101, available from the University of Central Florida Center for Research in Computer Vision \cite{ucf101}. It contains 101 action categories and approximately 13,000 video clips. The official dataset page provides the video data and standard train/test split information.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Data assets and their role in the proposed experiments.}
+\begin{tabularx}{\textwidth}{L{2.5cm}Y Y}
+\toprule
+\textbf{Asset} & \textbf{Use} & \textbf{Controls} \\
+\midrule
+UCF-101 training partition & Train supervised and semi-supervised models. & Generate and save a class-stratified 10\% labelled subset using a fixed seed. \\
+Remaining training videos & Unlabelled pool for FixMatch-style learning. & Ground-truth labels must be hidden from the training code. \\
+Validation subset & Select checkpoints and tune permitted hyperparameters. & Do not use official test videos for model selection. \\
+Official test split & Final Top-1 accuracy. & Evaluate only after the training configuration is fixed. \\
+Pseudo-label audit subset & Measure pseudo-label precision and coverage. & Its labels are held out from training and used only for offline evaluation. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The official UCF-101 train/test split will be retained. A validation subset will be taken from the training partition, and the remaining training videos will be used to create the labelled and unlabelled pools. The precise split convention, class counts, and random seed will be saved in a manifest and reported. No video or its frames may cross partitions.
+
+The 10\% labelled subset will be class-stratified so that all 101 categories are represented as far as the available training examples permit. The same subset will be used for the 10\%-supervised baseline and all semi-supervised experiments. The unlabelled pool's labels may exist in the source dataset, but the training pipeline must not access them; a sequestered subset may be used to audit pseudo-labels after predictions are generated.
+
+\subsection{Video preprocessing}
+Each example will be decoded into a fixed-length clip. The initial implementation will use 8 frames per clip with temporal sampling and spatial resolution chosen to match the 3D-ResNet-18 implementation and available compute. This is a starting configuration, not a claim that it reproduces the exact preprocessing of every reference paper. The final frame count, crop size, normalization, and sampling strategy will be recorded in the configuration files.
+
+Spatial transformations will be sampled once per clip and applied consistently across frames wherever required. Temporal transformations will be conservative and preserve the action-defining motion. Any augmentation that changes the semantic class of the action will be excluded.
+
+% ------------------------------ 6 METHODS ------------------------------
+\section{Methodology}
+\subsection{Backbone and baseline models}
+A 3D-ResNet-18 will be used as the primary backbone. This model is selected as a compact video architecture. The same backbone and clip preprocessing will be used for the principal comparisons.
+
+
+\begin{table}[H]
+\centering
+\small
+\caption{Core experiments.}
+\begin{tabularx}{\textwidth}{L{0.6cm}L{3.2cm}L{2.6cm}Y}
+\toprule
+\textbf{ID} & \textbf{Experiment} & \textbf{Labels} & \textbf{Purpose} \\
+\midrule
+A & Fully supervised & 100\% & Reference performance. \\
+B & Limited-label supervised & 10\% & Baseline without SSL. \\
+C & FixMatch (mild/standard) & 10\% + unlabelled & Measure the benefit of SSL. \\
+D & FixMatch (strong augmentation) & 10\% + unlabelled & Assess augmentation effects on pseudo-labels and accuracy. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The fully supervised result is an empirical reference for this backbone and protocol, not a theoretical upper bound on all possible models. To keep comparisons interpretable, the same test set, class mapping, backbone family, clip protocol, and evaluation code will be used throughout. Any unavoidable difference in training budget or initialization will be documented.
+
+\subsection{FixMatch-style consistency-based pseudo-labeling}
+Let $f_\theta$ denote the video classifier, $u$ an unlabelled clip, and $u_w$ and $u_s$ its weakly and strongly augmented views. The weak view provides the class distribution
+\[
+p_w = \operatorname{softmax}(f_\theta(u_w)).
+\]
+The pseudo-label and confidence are
+\[
+\hat{y}=\arg\max_c p_w(c), \qquad q=\max_c p_w(c).
+\]
+For confidence threshold $\tau$, the acceptance mask is
+\[
+m=\mathbb{1}[q\geq\tau].
+\]
+A starting threshold of $\tau=0.95$ will be tested, reflecting a common FixMatch configuration; it will be fixed or tuned only using the validation protocol, never the test set.
+
+For a labelled batch $\{(x_i,y_i)\}_{i=1}^{B_l}$, the supervised loss is
+\[
+\mathcal{L}_{s} =
+\frac{1}{B_l}\sum_{i=1}^{B_l}
+\operatorname{CE}\!\left(f_\theta(x_i),y_i\right).
+\]
+For an unlabelled batch $\{u_j\}_{j=1}^{B_u}$, the masked unsupervised loss is
+\[
+\mathcal{L}_{u} =
+\frac{1}{B_u}\sum_{j=1}^{B_u}
+m_j\,\operatorname{CE}\!\left(f_\theta(u_{s,j}),\hat{y}_j\right).
+\]
+The combined objective is
+\[
+\mathcal{L}=\mathcal{L}_{s}+\lambda_u\mathcal{L}_{u},
+\]
+where $\lambda_u$ controls the contribution of the unlabelled examples. The initial implementation will use $\lambda_u=1$ unless validation or stability checks justify a documented alternative. The mask is applied to the unsupervised term only; the supervised loss remains active for every labelled example.
+
+\subsection{Augmentation design and ablation}
+The core augmentation experiment will vary the strength of the strong view while holding the weak-view policy constant. The standard FixMatch configuration will serve as the mild condition, avoiding a duplicate run. The exact transformations will be selected after confirming they preserve action semantics and are supported by the video data pipeline. The initial ablation focuses on implementable frame-level policies.
+
+
+\begin{table}[H]
+\centering
+\small
+\caption{Planned augmentation conditions. Exact magnitudes will be recorded in the experiment configuration.}
+\begin{tabularx}{\textwidth}{L{2.5cm}Y}
+\toprule
+\textbf{Augmentation} & \textbf{Strong-view policy} \\
+\midrule
+Mild & Standard label-preserving crop/resize and horizontal flip, with modest appearance perturbations. \\
+Strong & Stronger label-preserving crop and colour/appearance perturbations, with spatial masking/cutout where suitable. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+The augmentation ablation will compare the standard FixMatch configuration (mild strong-view augmentation) against a stronger policy while keeping the weak-view policy and other training settings constant. This isolates the effect of strong-view augmentation on pseudo-label quality and final accuracy. Strong augmentation must preserve action semantics and remain consistent across frames where necessary; transformations that introduce temporal flicker or change the action label will be excluded.
+
+\subsection{Pseudo-label quality measurement}
+Pseudo-label evaluation will use examples whose labels are not available to the training algorithm. For accepted pseudo-labels,
+\[
+\text{Precision} =
+\frac{\#\{\text{accepted pseudo-labels that are correct}\}}
+{\#\{\text{accepted pseudo-labels}\}},
+\]
+and
+\[
+\text{Coverage} =
+\frac{\#\{\text{unlabelled examples accepted}\}}
+{\#\{\text{examples in the audit pool}\}}.
+\]
+Pseudo-label accuracy over the entire audit pool may also be reported. Precision and coverage will be presented together because a high threshold can increase precision while reducing the number of examples contributing to the unsupervised loss. The audit labels will never be used to update model weights, tune the confidence threshold, or select individual pseudo-labels.
+
+% ------------------------------ 7 EVALUATION ------------------------------
+\section{Evaluation Plan}
+\subsection{Primary metrics}
+\begin{itemize}
+  \item \textbf{Top-1 accuracy:} percentage of test videos for which the highest-scoring class matches the ground-truth action.
+  \item \textbf{Pseudo-label precision:} correctness among accepted pseudo-labels on the held-out audit pool.
+  \item \textbf{Pseudo-label coverage:} fraction of audit-pool examples accepted by the confidence threshold.
+  \item \textbf{Training diagnostics:} supervised loss, unsupervised loss, validation accuracy, confidence distribution, and acceptance rate.
+  \item \textbf{Resource use:} training time, inference time, and peak GPU memory where practical.
+\end{itemize}
+
+The absolute semi-supervised gain will be calculated as
+\[
+\Delta_{\mathrm{SSL}} =
+A_{\mathrm{SSL}} - A_{\mathrm{10\%\ supervised}},
+\]
+where accuracy is expressed in percentage points. The fraction of the supervised gap closed by semi-supervised learning may be reported as
+\[
+R =
+\frac{A_{\mathrm{SSL}}-A_{\mathrm{10\%\ supervised}}}
+{A_{\mathrm{100\%\ supervised}}-A_{\mathrm{10\%\ supervised}}}.
+\]
+This ratio is undefined if the two supervised reference accuracies are equal and can exceed 1 if the semi-supervised model exceeds the measured full-label reference. It is a descriptive statistic, not a probability.
+
+\subsection{Result tables to populate}
+The following tables will be filled only after running the experiments.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Main comparison on the held-out UCF-101 test set.}
+\begin{tabularx}{\textwidth}{L{4.2cm}L{2.2cm}L{2.3cm}Y}
+\toprule
+\textbf{Model} & \textbf{Labels} & \textbf{Top-1 (\%)} & \textbf{Gain over 10\% baseline} \\
+\midrule
+Supervised baseline & 100\% & - & Reference \\
+Supervised baseline & 10\% & - & Reference \\
+FixMatch - mild/standard augmentation & 10\% + unlabelled & - & - \\
+FixMatch - strong augmentation & 10\% + unlabelled & - & - \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+\begin{table}[H]
+\centering
+\small
+\caption{Augmentation ablation.}
+\begin{tabularx}{\textwidth}{L{3.2cm}L{3.2cm}L{2.5cm}Y}
+\toprule
+\textbf{Strong-view policy} & \textbf{Pseudo-label precision (\%)} & \textbf{Coverage (\%)} & \textbf{Test Top-1 (\%)} \\
+\midrule
+Mild & - & - & - \\
+Strong & - & - & - \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+The primary plot will show Top-1 accuracy by method. Additional plots will show validation accuracy and losses over epochs, pseudo-label precision versus coverage, and the effect of augmentation strength on both pseudo-label quality and final accuracy. A confusion matrix or per-class accuracy summary will be added if time permits.
+
+\subsection{Fair-comparison controls}
+\begin{itemize}
+  \item Keep the labelled subset, test split, class mapping, and seed fixed for the primary comparison.
+  \item Do not expose hidden labels from the unlabelled pool to the training code.
+  \item Tune thresholds and augmentation settings on validation data only.
+  \item Save the exact configuration, random seed, checkpoint, and metric outputs for each run.
+  \item Report the selected clip-sampling and test-time evaluation protocol alongside accuracy; do not compare numbers from different protocols as if they were identical.
+  \item If compute permits, repeat the primary 10\%-supervised and best semi-supervised runs across multiple seeds and report mean and standard deviation.
+\end{itemize}
+
+% ------------------------------ 8 PIPELINE ------------------------------
+\section{Implementation Pipeline}
+\begin{enumerate}[label=\textbf{Phase \arabic*:},leftmargin=2.4cm]
+  \item \textbf{Repository and environment audit.} Select a compatible 3D-ResNet-18 implementation, confirm the framework and checkpoint format, verify GPU availability, and run a minimal forward/backward pass.
+  \item \textbf{Data preparation.} Download UCF-101 from the official source, validate video decoding, prepare manifests, preserve official splits, and create the fixed class-stratified 10\% labelled subset.
+  \item \textbf{Supervised baselines.} Train the 100\%-labelled and 10\%-labelled baselines, establish checkpoint selection and test evaluation, and save all configurations.
+  \item \textbf{FixMatch implementation.} Implement weak/strong views, confidence masking, the unsupervised loss, and logging for pseudo-label confidence and acceptance rate. Verify the training loop with a smoke test.
+  \item \textbf{Standard FixMatch experiment.} Train FixMatch with the initial augmentation configuration and compare its Top-1 accuracy against the 10\%-labelled supervised baseline.
+  \item \textbf{Augmentation ablation.} Compare the standard FixMatch configuration (mild strong-view augmentation) with a stronger augmentation policy, measure pseudo-label precision and coverage on the audit pool, and evaluate Top-1 accuracy on the held-out test set.
+  \item \textbf{Analysis and submission.} Generate tables and plots from saved metrics, document limitations, and make the experiments reproducible from a clean setup.
+\end{enumerate}
+
+
+
+% ------------------------------ 9 TIMELINE ------------------------------
+\section{Proposed Timeline}
+The schedule below is relative to the project start date and can be shifted to match the course deadline. The schedule prioritizes the supervised baselines, FixMatch implementation, and augmentation ablation.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Indicative eight-week plan and completion gates.}
+\begin{tabularx}{\textwidth}{L{1.4cm}L{3.2cm}Y}
+\toprule
+\textbf{Week} & \textbf{Phase} & \textbf{Deliverable} \\
+\midrule
+1 & Literature and environment & Papers reviewed; 3D-ResNet-18 implementation selected; data and compute feasibility checked. \\
+2 & Dataset and data loader & Official split manifest, fixed 10\% labelled subset, video decoding and clip sampling validated. \\
+3 & Supervised baselines & 10\%- and 100\%-labelled runs complete or reproducible; evaluation pipeline verified. \\
+4 & FixMatch implementation & Weak/strong views, confidence masking, unsupervised loss, and checkpointing verified by smoke tests. \\
+5 & Standard FixMatch & Standard configuration trained and compared against the 10\%-labelled supervised baseline. \\
+6 & Augmentation ablation & Mild and strong augmentation variants trained; configurations and results recorded. \\
+7 & Quality analysis & Pseudo-label precision, coverage, final comparisons, and error analysis completed. \\
+8 & Final analysis and report & Final plots, limitations, reproducibility instructions, and presentation prepared. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ------------------------------ 10 RISKS ------------------------------
+\section{Risks, Limitations, and Contingencies}
+
+\begin{longtable}{L{0.25\textwidth}L{0.69\textwidth}}
+\toprule
+\textbf{Risk} & \textbf{Mitigation / Response} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Risk} & \textbf{Mitigation / Response} \\
+\midrule
+\endhead
+GPU memory or training time & Reduce batch size or frame count, use mixed precision if supported, and begin with short smoke tests. Record deviations from the intended setup. \\
+Unstable or low-quality pseudo-labels & Log precision, coverage, confidence distributions, and unsupervised loss. Tune only on validation data. \\
+Augmentations alter action semantics & Apply spatial transformations consistently across frames and exclude transformations that change the class-defining content. \\
+Data leakage & Keep unlabelled-pool labels separate from the training interface and reserve the test set for final evaluation. \\
+Published numbers do not match & Treat literature results as context, not promised targets. Document the full protocol before comparison. \\
+Limited novelty claims & Frame the contribution as a controlled empirical investigation and review related work before making novelty claims. \\
+\bottomrule
+\end{longtable}
+
+
+\subsection{Scope if the project falls behind}
+The non-negotiable deliverables are: the 100\%-labelled reference, the 10\%-labelled supervised baseline, a working FixMatch-style training loop, and the augmentation ablation with pseudo-label precision/coverage and Top-1 accuracy. If time becomes limited, reduce the number of augmentation variants or repeated seeds before dropping these core comparisons.
+
+% ------------------------------ 11 COMPUTE / REPRODUCIBILITY ------------------------------
+\newpage
+\section{Compute and Reproducibility}
+The implementation will use Python and a deep-learning framework compatible with the selected 3D-ResNet-18 implementation. The exact hardware, software versions, pretrained initialization (if any), frame count, spatial resolution, optimizer, learning-rate schedule, batch sizes, epoch budget, and test-time clip protocol will be recorded before final reporting.
+
+All experiments will use configuration files rather than hidden code-level settings. A run will save its configuration, random seed, checkpoint, training log, and machine-readable metrics. The dataset itself will not be committed to the code repository; setup instructions will point to the official UCF-101 page and explain the expected directory structure.
+
+% ------------------------------ REFERENCES ------------------------------
+\section{References}
+\begin{thebibliography}{9}
+
+\bibitem{fixmatch}
+K. Sohn, D. Berthelot, C.-L. Li, Z. Zhang, N. Carlini, E. D. Cubuk, A. Kurakin, H. Zhang, and C. Raffel,
+\newblock ``FixMatch: Simplifying Semi-Supervised Learning with Consistency and Confidence,''
+\newblock in \emph{Advances in Neural Information Processing Systems (NeurIPS)}, vol. 33, 2020.
+\newblock Paper: \url{https://arxiv.org/abs/2001.07685}.
+\newblock Code: \url{https://github.com/google-research/fixmatch}.
+
+\bibitem{f2fixmatch}
+Z. Tu, X. Shu, P. Huang, R. Yan, Z. Liu, and J. Zhang,
+\newblock ``Leveraging Frame- and Feature-level Progressive Augmentation for Semi-supervised Action Recognition,''
+\newblock \emph{ACM Transactions on Multimedia Computing, Communications, and Applications}, vol. 21, no. 4, Article 107, March 2025.
+\newblock DOI: \url{https://doi.org/10.1145/3655025}.
+\newblock Code: \url{https://github.com/zwtu/F2FixMatch}.
+
+\bibitem{ucf101}
+K. Soomro, A. R. Zamir, and M. Shah,
+\newblock ``UCF101: A Dataset of 101 Human Actions Classes From Videos in The Wild,''
+\newblock CRCV, University of Central Florida, 2012.
+\newblock Dataset page: \url{https://www.crcv.ucf.edu/data/UCF101.php}.
+\newblock Technical report: \url{https://arxiv.org/abs/1212.0402}.
+
+\end{thebibliography}
+
+\vfill
+\begin{keybox}
+\textbf{Expected final deliverable.} A reproducible UCF-101 study that compares full-label supervision, 10\%-label supervision, and FixMatch-style semi-supervised learning; quantifies how augmentation strength changes pseudo-label precision/coverage and Top-1 accuracy.
+\end{keybox}
+
+\end{document}
