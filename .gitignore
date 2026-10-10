@@ -220,6 +220,6 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Latex
-.aux
-.out
-.toc
+*.aux
+*.out
+*.toc
