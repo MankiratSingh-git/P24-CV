@@ -275,6 +275,16 @@ Epoch 0          Epoch 40                                              Epoch 220
 
 * **Warmup Rationale**: Random initial weights yield arbitrary pseudo-labels. Enforcing consistency on noise leads to severe confirmation bias and parameter divergence. The 40-epoch supervised warmup establishes semantic representations before unlabeled data is leveraged.
 * **Optimization Details**:
+
+> [!IMPORTANT]
+> **Distributed Batch Sizing & The Linear Learning Rate Scaling Rule (Goyal et al., 2017)**
+> * In the official reference implementation (`ref_ltg/configs/ucf101_main/...`), the configuration explicitly states:
+>   `lr = 0.2  # this lr 0.2 is used for 8 gpus (total batch size = 40 videos)`
+> * According to the Linear Scaling Rule cited in the paper (Section 4.2), the learning rate must scale proportionally with the actual mini-batch size:
+>   $$\text{LR}_{\text{effective}} = \text{LR}_{\text{base}} \times \frac{B_{\text{actual}}}{B_{\text{ref}}}$$
+> * While $\text{LR} = 0.2$ is optimal for 8 GPUs ($B=40$), retaining $\text{LR} = 0.2$ on a single GPU ($B=8$) introduces **$5\times$ excessive gradient variance**. In SGD with momentum, this causes the optimizer to overshoot narrow loss minima and plateau early around **~35%–36%**.
+> * Calibrating the single-GPU learning rate to **$\text{LR} = 0.05$** (or $0.04$) aligns the optimization trajectory with the single-GPU mini-batch noise level, preventing optimizer bounce and enabling proper convergence toward the published benchmarks.
+
   * Optimizer: Stochastic Gradient Descent (SGD) with momentum $\beta = 0.9$, weight decay $\lambda = 10^{-4}$.
   * Initial learning rate: $\eta_0 = 0.2$.
   * Learning rate schedule: Linear warm-up for initial epochs, followed by Cosine Annealing Decay down to $10^{-5}$:
