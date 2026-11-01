@@ -57,7 +57,7 @@ flowchart TD
         Zw["Frame Weak Feature (Z_w)"]
         Zs["Frame Strong Feature (Z_s)"]
         TAP["Temporal Average Pooling (TAP)<br/>B x 512 x 8 x 7 x 7  -->  B x 512 x 7 x 7"]
-        FeatPerturb["Feature Perturbator A_feat<br/>• Spatial Dropout (p=0.2)<br/>• Feature Flip (p=0.5)<br/>• Noise Injection / Feature CutMix"]
+        FeatPerturb["Feature Perturbator A_feat<br/>• Spatial Dropout (p=0.5)<br/>• Feature Flip (p=0.5)<br/>• Noise Injection / Feature CutMix"]
         
         Res45 --> Zw
         Res45 --> Zs
@@ -315,3 +315,17 @@ To accurately replicate published benchmark numbers, test evaluation follows the
 | **$F^2$-FixMatch (A1 Ablation)**| 10% (953) | 90% (8,584) | RGB + TG | Bi-modal Frame W/S-Aug ($Z_w, Z_s$) | **67.9%** (Table 4) | ~87.4% |
 | **$F^2$-FixMatch (Full)** | 10% (953) | 90% (8,584) | RGB + TG | P-Aug ($Z_w, Z_s, Z_{w\_p}, Z_{s\_p}$) + MPL | **71.1%** (Table 3) | **90.3%** |
 | **Supervised Upper Bound** | 100% (9,537)| None | RGB | All UCF-101 annotations | **~81% – 84%** | ~95.8% |
+
+---
+
+## 7. Implementation Audit & Discrepancy Resolution
+
+| Component | Audit Observation | Implemented Resolution & Status |
+| :--- | :--- | :--- |
+| **RGB / TG Modality Sync** | Spatial crop coordinates and flips were sampled independently in `dataset.py`. | **Resolved**: `sample_crop_parameters` samples bounding boxes and flip states once; `apply_crop_parameters`, `apply_preset_ops`, and cutout patch reuse synchronize RGB and TG modalities 100%. |
+| **P-Aug Feature Gradient Flow** | `torch.no_grad()` on `z_w` feature extraction blocked backpropagation from $\mathcal{L}_u^{w_p}$ into the backbone. | **Resolved**: `z_w` computed with gradients enabled; only pseudo-label assignment is detached. Gradients verified flowing directly to backbone `conv1` (`grad.sum() > 0`). |
+| **FixMatch Joint Forward / BatchNorm** | Labeled, weak, and strong batches were forwarded separately, drifting BatchNorm statistics. | **Resolved**: Joint concatenation `[labeled, weak, strong]` in single forward pass; verified unified BatchNorm tracking. |
+| **RandAugment Signs** | Deterministic parameter sign directions for rotation, shear, and translation. | **Resolved**: Uniform random $\pm$ sign sampling implemented across all 13 transformation operations in `augmentations.py`. |
+| **Spatial Dropout Probability** | Set to `0.2` in `FeaturePerturbator`. | **Resolved**: Updated default to `p = 0.5` matching Section 3.2. |
+| **Gradient Accumulation** | Potential under-scaling on terminal leftover batches. | **Resolved**: Dynamically scales by `min(accum_steps, len(loader) - current_window_start)`. |
+| **Dataset Failures** | Silent fallback to black dummy frames masked corrupted data or bad paths. | **Resolved**: Replaced with explicit `RuntimeError` tracking for fail-fast data integrity. |
