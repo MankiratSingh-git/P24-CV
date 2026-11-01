@@ -30,6 +30,7 @@ def parse_args():
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--output-dir", type=str, default="checkpoints/supervised_baseline")
     parser.add_argument("--eval-freq", type=int, default=5, help="Validation evaluation frequency (epochs)")
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from")
     return parser.parse_args()
 
 
@@ -127,10 +128,25 @@ def main():
     )
     ce_loss_fn = nn.CrossEntropyLoss()
 
+    start_epoch = 0
     best_val_top1 = 0.0
+
+    if args.resume:
+        if os.path.isfile(args.resume):
+            print(f"=> Loading checkpoint '{args.resume}'...")
+            checkpoint = torch.load(args.resume, map_location=device)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            if 'optimizer_state_dict' in checkpoint:
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            start_epoch = checkpoint.get('epoch', 0)
+            best_val_top1 = checkpoint.get('best_val_top1', checkpoint.get('val_top1', 0.0))
+            print(f"=> Resumed from Epoch {start_epoch} (Best Val Top-1: {best_val_top1:.2f}%)")
+        else:
+            print(f"[Warning] Checkpoint '{args.resume}' not found! Starting training from scratch.")
+
     start_time = time.time()
 
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         model.train()
         current_lr = adjust_learning_rate(optimizer, epoch, args.epochs, args.warmup_epochs, args.lr)
 
@@ -183,6 +199,14 @@ def main():
                 f"Top-5 Acc: {val_top5:.2f}%",
                 flush=True
             )
+
+        # Save latest checkpoint after every epoch
+        torch.save({
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'best_val_top1': best_val_top1,
+        }, os.path.join(args.output_dir, "latest_checkpoint.pth"))
 
     elapsed = time.time() - start_time
     print("=" * 60)
