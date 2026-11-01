@@ -200,13 +200,6 @@ This produces four distinct feature representations per video:
 
 For mini-batch with $B_l$ labeled samples and $B_u = \mu B_l$ unlabeled samples ($\mu = 4$):
 
-> [!NOTE]
-> **Batch Size & Unlabeled Ratio ($\mu$) in the Literature:**
-> * **Image FixMatch (Sohn et al., NeurIPS 2020, Section 4 & Appendix B.5, Fig. 5a)**: Defaults to $\mu = 7$ and $B_l = 64$ (total unlabeled batch $B_u = 448$). The authors' ablation shows that increasing the ratio of unlabeled data from $\mu = 1$ to $\mu = 7$ steadily lowers the error rate by up to 10%–15%.
-> * **$F^2$-FixMatch for Video (Tu et al., ACM TOMM 2025, Section 4.2, p. 11–12)**: Adapts this ratio for 3D video, setting $\mu = 4$ for UCF-101 and $\mu = 1$ for HMDB-51:
->   > *"The mini-batch size per GPU is set as four clips for labeled data and $4 \times \mu$ clips for unlabeled data... In the training phase, the hyper-parameter $\mu$ in Section 3.2 is set as 4 for UCF-101 and 1 for HMDB-51. We train the whole model with an initial learning rate of 0.2 on 2 GPUs and adopt gradient accumulation to imitate a larger mini-batch size... We use synchronous batch normalization (BN) to compute the BN statistics within the clips across all GPUs."*
-> * **Hardware Memory Scaling**: In 3D video, each clip consists of 8 spatial frames ($8 \times 224 \times 224 \times 3$). Feeding bi-modal weak/strong streams across labeled and unlabeled batches requires holding dozens of dense 5D activation volumes in VRAM. On consumer hardware (e.g. 6GB RTX 4050), $B_l = 4, \mu = 4$ ($B_u = 16$) hits the sweet spot between full GPU memory utilization and robust consistency learning.
-
 #### 1. Supervised Loss ($\mathcal{L}_s$)
 Computed on weakly augmented labeled samples across both modalities:
 $$\mathcal{L}_s^V = \frac{1}{B_l} \sum_{k=1}^{B_l} H\left(y_k, F(A_w(x_k^V))\right)$$
@@ -239,6 +232,27 @@ where $\alpha = 2.0, \beta = 2.0, \gamma = 1.0$.
 
 For standard FixMatch (RGB only):
 $$\mathcal{L}_{\text{FixMatch}} = \mathcal{L}_s + \lambda_u \mathcal{L}_u, \quad \lambda_u = 1.0$$
+
+---
+
+### 3.6 Hyperparameter & Configuration Specifications
+
+| Parameter / Component | Paper Specification (Section 4.2 & Table 2) |
+| :--- | :--- |
+| **Backbone Architecture** | 3D-ResNet-18 (Inflated 2D-to-3D in res3, res4, res5; temporal stride 1; 31.87M params) |
+| **Input Modality** | Bi-modal: RGB ($V$) + on-the-fly Temporal Gradient ($G$): $x_t^G = \frac{x_t^V - x_{t+1}^V + 255}{2}$ |
+| **Clip Sampling** | 8 frames with sampling stride of 8 (covering 64 consecutive frames) |
+| **Weak Augmentation** | Shorter side in $[256, 320]$, random crop $224 \times 224$, horizontal flip $p=0.5$ |
+| **Strong Augmentation** | Video RandAugment (13 operations) + Video Cutout ($128 \times 128$) |
+| **Feature Perturbations (P-Aug)** | Temporal-Avg-Pooling (TAP) + Spatial Dropout ($p=0.5$) + Noise injection + Feature flipping |
+| **Multihead Pseudo-Labeling (MPL)** | Aggregating predictions across weak/strong frame and feature heads |
+| **Loss Weights** | $\alpha = 2.0, \beta = 2.0, \gamma = 1.0$ |
+| **Pseudo-label Threshold** | $\tau = 0.3$ |
+| **Warmup Phase** | 40 epochs strictly on labeled data ($\mathcal{L}_s$) |
+| **Total Training Epochs** | 220 epochs (for 10% UCF-101 subset) |
+| **Optimizer & Schedule** | SGD (momentum 0.9, weight decay $10^{-4}$), initial LR 0.2, cosine annealing |
+| **Effective Mini-Batch Size** | 2 GPUs with 4 labeled clips each ($B_l=8, B_u=32$) with gradient accumulation |
+| **Test-Time Protocol** | 10 uniform temporal clips $\times$ 3 spatial crops ($256 \times 256$, 30 views total) |
 
 ---
 
