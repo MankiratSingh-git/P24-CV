@@ -209,15 +209,18 @@ def main():
                 tg_s = tg_s.to(device, non_blocking=True)
                 bz_u = rgb_w.size(0)
 
-                # Extract features for weakly augmented RGB and TG (without gradient for pseudo label)
+                # Extract features for weakly augmented RGB and TG
+                # Note: Gradients are preserved so P-Aug features backpropagate through the backbone
+                z_w_rgb = model.forward_backbone(rgb_w)
+                logits_w_rgb = model.forward_logits(z_w_rgb)
+
+                z_w_tg = model.forward_backbone(tg_w)
+                logits_w_tg = model.forward_logits(z_w_tg)
+
+                # Multihead Pseudo-Labeling (MPL) aggregation: targets are detached
                 with torch.no_grad():
-                    z_w_rgb = model.forward_backbone(rgb_w)
-                    p_w_rgb = F.softmax(model.forward_logits(z_w_rgb), dim=-1)
-
-                    z_w_tg = model.forward_backbone(tg_w)
-                    p_w_tg = F.softmax(model.forward_logits(z_w_tg), dim=-1)
-
-                    # Multihead Pseudo-Labeling aggregation: p_w_agg = (p_w_rgb + p_w_tg) / 2
+                    p_w_rgb = F.softmax(logits_w_rgb, dim=-1)
+                    p_w_tg = F.softmax(logits_w_tg, dim=-1)
                     p_w_agg = 0.5 * (p_w_rgb + p_w_tg)
                     max_probs, pseudo_labels = torch.max(p_w_agg, dim=-1)
                     confident_mask = (max_probs >= args.threshold)
@@ -239,7 +242,7 @@ def main():
                     loss_u_s = (loss_u_s_rgb + loss_u_s_tg) / (2.0 * float(bz_u))
 
                     # --- P-Aug: Feature-level perturbation on Z_w and Z_s ---
-                    # Z_{w_p}: frame weak, feature perturbed
+                    # Z_{w_p}: frame weak, feature perturbed (gradients flow through z_w to backbone)
                     _, logits_wp_rgb = model.forward_paug(z_w_rgb)
                     _, logits_wp_tg = model.forward_paug(z_w_tg)
 
@@ -270,8 +273,12 @@ def main():
 
                 total_unlabeled_samples += bz_u
 
-            # Gradient accumulation to match 2-GPU effective mini-batch size (Section 4.2)
-            loss_for_backward = total_loss / float(args.accum_steps)
+            # Gradient accumulation: properly scale even if dataset size is not divisible
+            steps_in_window = min(
+                args.accum_steps,
+                len(labeled_loader) - (batch_idx // args.accum_steps) * args.accum_steps
+            )
+            loss_for_backward = total_loss / float(steps_in_window)
             loss_for_backward.backward()
 
             if (batch_idx + 1) % args.accum_steps == 0 or (batch_idx + 1) == len(labeled_loader):

@@ -173,11 +173,11 @@ class FeaturePerturbator(nn.Module):
     """
     Feature-level Perturbator A_feat for Progressive Augmentation (P-Aug):
     1. Temporal-Avg-Pooling (TAP): averages over temporal dimension T (Z -> R^{B x C x H x W}).
-    2. Spatial Dropout: randomly zeroes entire channels/patches.
+    2. Spatial Dropout: randomly zeroes entire channels/patches with probability 0.5.
     3. Noise Injection: CutMix / patch swapping at feature level between batch samples.
     4. Feature Flipping: randomly flips features horizontally.
     """
-    def __init__(self, spatial_drop_prob=0.2, flip_prob=0.5, noise_injection_prob=0.5):
+    def __init__(self, spatial_drop_prob=0.5, flip_prob=0.5, noise_injection_prob=0.5):
         super(FeaturePerturbator, self).__init__()
         self.spatial_drop_prob = spatial_drop_prob
         self.flip_prob = flip_prob

@@ -166,16 +166,17 @@ def main():
         for batch_idx, (labeled_clips, labeled_targets) in enumerate(labeled_loader):
             labeled_clips = labeled_clips.to(device, non_blocking=True)
             labeled_targets = labeled_targets.to(device, non_blocking=True)
+            bz_l = labeled_clips.size(0)
 
-            # Supervised Loss L_s
-            labeled_logits = model(labeled_clips)
-            loss_s = ce_loss_fn(labeled_logits, labeled_targets)
-
-            loss = loss_s
             loss_u_val = 0.0
 
-            # Unsupervised FixMatch Loss (only active after warmup)
-            if epoch >= args.warmup_epochs:
+            if epoch < args.warmup_epochs:
+                # Warmup: purely supervised on labeled clips
+                logits_l = model(labeled_clips)
+                loss_s = ce_loss_fn(logits_l, labeled_targets)
+                loss = loss_s
+            else:
+                # FixMatch: joint forward pass (labeled + weak + strong) for unified BatchNorm stats
                 try:
                     unlabeled_batch = next(unlabeled_iter)
                 except StopIteration:
@@ -187,25 +188,38 @@ def main():
                 unlabeled_strong = unlabeled_strong.to(device, non_blocking=True)
                 bz_u = unlabeled_weak.size(0)
 
-                # Generate pseudo-labels from weakly augmented clips without gradient
+                # Concatenate labeled, weak, and strong batches into a single joint tensor
+                joint_inputs = torch.cat([labeled_clips, unlabeled_weak, unlabeled_strong], dim=0)
+                joint_logits = model(joint_inputs)
+
+                logits_l = joint_logits[:bz_l]
+                logits_u_w, logits_u_s = joint_logits[bz_l:].chunk(2)
+
+                loss_s = ce_loss_fn(logits_l, labeled_targets)
+
+                # Pseudo-label assignment from weak views (detached target)
                 with torch.no_grad():
-                    logits_weak = model(unlabeled_weak)
-                    probs_weak = F.softmax(logits_weak, dim=-1)
+                    probs_weak = F.softmax(logits_u_w, dim=-1)
                     max_probs, pseudo_labels = torch.max(probs_weak, dim=-1)
                     mask = (max_probs >= args.threshold)
                     num_confident = mask.sum().item()
 
                 if num_confident > 0:
-                    logits_strong = model(unlabeled_strong)
-                    # Cross entropy on confident samples, normalized by total unlabeled batch size B_u
-                    loss_u = F.cross_entropy(logits_strong[mask], pseudo_labels[mask], reduction='sum') / float(bz_u)
-                    loss = loss + args.lambda_u * loss_u
+                    loss_u = F.cross_entropy(logits_u_s[mask], pseudo_labels[mask], reduction='sum') / float(bz_u)
+                    loss = loss_s + args.lambda_u * loss_u
                     loss_u_val = loss_u.item()
                     total_confident_samples += num_confident
+                else:
+                    loss = loss_s
+
                 total_unlabeled_samples += bz_u
 
-            # Gradient accumulation to match 2-GPU effective mini-batch size (Section 4.2)
-            loss_for_backward = loss / float(args.accum_steps)
+            # Gradient accumulation: properly scale current window even if dataset size isn't divisible
+            steps_in_window = min(
+                args.accum_steps,
+                len(labeled_loader) - (batch_idx // args.accum_steps) * args.accum_steps
+            )
+            loss_for_backward = loss / float(steps_in_window)
             loss_for_backward.backward()
 
             if (batch_idx + 1) % args.accum_steps == 0 or (batch_idx + 1) == len(labeled_loader):

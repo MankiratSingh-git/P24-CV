@@ -10,7 +10,8 @@ from torch.utils.data import Dataset, DataLoader
 from augmentations import (
     VideoRandAugment,
     VideoCutout,
-    video_resize_and_crop,
+    sample_crop_parameters,
+    apply_crop_parameters,
     normalize_clip
 )
 
@@ -188,26 +189,34 @@ class UCF101Dataset(Dataset):
                 raw_tg = compute_temporal_gradient(raw_rgb, raw_next)
             else:
                 raw_tg = None
-        except Exception:
-            # Fallback dummy clip if video read error occurs
-            raw_rgb = [Image.fromarray(np.zeros((240, 320, 3), dtype=np.uint8)) for _ in range(self.clip_len)]
-            raw_tg = [Image.fromarray(np.zeros((240, 320, 3), dtype=np.uint8)) for _ in range(self.clip_len)] if self.include_tg else None
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load/decode video frames from {video_path} at indices {rgb_idx}: {e}"
+            ) from e
+
+        orig_w, orig_h = raw_rgb[0].size
 
         if not self.is_train:
             # Validation / Test: center crop, resize, normalize RGB
-            val_rgb = video_resize_and_crop(raw_rgb, min_size=256, max_size=256, crop_size=224, is_train=False)
+            val_params = sample_crop_parameters(
+                orig_w, orig_h, min_size=256, max_size=256, crop_size=224, is_train=False
+            )
+            val_rgb = apply_crop_parameters(raw_rgb, val_params)
             arr = np.stack([np.array(f) for f in val_rgb], axis=0)
             tensor_rgb = normalize_clip(arr)
             return tensor_rgb, label
 
-        # Training Weak Augmentations
-        weak_rgb = video_resize_and_crop(raw_rgb, min_size=256, max_size=320, crop_size=224, is_train=True)
+        # Training Weak Augmentations: shared crop and flip parameters across modalities
+        weak_params = sample_crop_parameters(
+            orig_w, orig_h, min_size=256, max_size=320, crop_size=224, is_train=True
+        )
+        weak_rgb = apply_crop_parameters(raw_rgb, weak_params)
         weak_rgb_arr = np.stack([np.array(f) for f in weak_rgb], axis=0)
         tensor_rgb_w = normalize_clip(weak_rgb_arr)
 
         tensor_tg_w = None
         if self.include_tg and raw_tg is not None:
-            weak_tg = video_resize_and_crop(raw_tg, min_size=256, max_size=320, crop_size=224, is_train=True)
+            weak_tg = apply_crop_parameters(raw_tg, weak_params)
             weak_tg_arr = np.stack([np.array(f) for f in weak_tg], axis=0)
             tensor_tg_w = normalize_clip(weak_tg_arr)
 
@@ -218,17 +227,25 @@ class UCF101Dataset(Dataset):
             return tensor_rgb_w, label
 
         # Unlabeled sample: also produce Strongly Augmented version
-        strong_rgb = self.rand_aug(raw_rgb)
-        strong_rgb = self.cutout(strong_rgb)
-        strong_rgb = video_resize_and_crop(strong_rgb, min_size=256, max_size=320, crop_size=224, is_train=True)
+        # 1. Video RandAugment (sample ops on RGB, apply identical ops to TG)
+        strong_rgb, sampled_ops = self.rand_aug(raw_rgb)
+
+        # 2. Video Cutout (sample patch on RGB, apply identical patch to TG)
+        strong_rgb, cutout_patch = self.cutout(strong_rgb)
+
+        # 3. Synchronized Crop & Flip across modalities for the strong view
+        strong_params = sample_crop_parameters(
+            orig_w, orig_h, min_size=256, max_size=320, crop_size=224, is_train=True
+        )
+        strong_rgb = apply_crop_parameters(strong_rgb, strong_params)
         strong_rgb_arr = np.stack([np.array(f) for f in strong_rgb], axis=0)
         tensor_rgb_s = normalize_clip(strong_rgb_arr)
 
         tensor_tg_s = None
         if self.include_tg and raw_tg is not None:
-            strong_tg = self.rand_aug(raw_tg)
-            strong_tg = self.cutout(strong_tg)
-            strong_tg = video_resize_and_crop(strong_tg, min_size=256, max_size=320, crop_size=224, is_train=True)
+            strong_tg = self.rand_aug.apply_preset_ops(raw_tg, sampled_ops)
+            strong_tg, _ = self.cutout(strong_tg, patch=cutout_patch)
+            strong_tg = apply_crop_parameters(strong_tg, strong_params)
             strong_tg_arr = np.stack([np.array(f) for f in strong_tg], axis=0)
             tensor_tg_s = normalize_clip(strong_tg_arr)
 

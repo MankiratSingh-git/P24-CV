@@ -145,8 +145,12 @@ def main():
             logits = model(clips)
             loss = ce_loss_fn(logits, targets)
 
-            # Gradient accumulation
-            loss_for_backward = loss / float(args.accum_steps)
+            # Gradient accumulation: properly scale current window even if dataset size isn't divisible
+            steps_in_window = min(
+                args.accum_steps,
+                len(labeled_loader) - (batch_idx // args.accum_steps) * args.accum_steps
+            )
+            loss_for_backward = loss / float(steps_in_window)
             loss_for_backward.backward()
 
             if (batch_idx + 1) % args.accum_steps == 0 or (batch_idx + 1) == len(labeled_loader):

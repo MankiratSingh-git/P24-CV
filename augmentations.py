@@ -1,17 +1,30 @@
-import random
-import math
-import numpy as np
-from PIL import Image, ImageOps, ImageEnhance
+"""
+Video Data Augmentation Module for FixMatch and F2-FixMatch.
+Faithfully ported for video action recognition:
+1. Synchronized Weak Augmentations: Shared random crop coordinates & flips across modalities (RGB + TG).
+2. Video RandAugment: Uniformly samples operations and randomized signs (+/-) across frames.
+3. Video Cutout: Spatially masks a 128x128 square patch across all frames.
+"""
 
-# Normalization constants (ImageNet standard)
+import math
+import random
+import numpy as np
+from PIL import Image, ImageEnhance, ImageOps
+
+# Standard ImageNet normalization parameters used in 3D-ResNet-18
 IMAGENET_MEAN = np.array([123.675, 116.28, 103.53], dtype=np.float32)
 IMAGENET_STD = np.array([58.395, 57.12, 57.375], dtype=np.float32)
-FILL_COLOR = (124, 116, 104)
 
 
-# -------------------------------------------------------------
-# Video-Level RandAugment Primitive Operations
-# -------------------------------------------------------------
+# ==============================================================================
+# 1. Video RandAugment Transformations (Temporally Coherent with Random Sign)
+# ==============================================================================
+
+def _apply_op_to_clip(clip, op_fn, val):
+    """Apply an image operation to all PIL frames in a video clip using identical parameters."""
+    return [op_fn(frame, val) for frame in clip]
+
+
 def _auto_contrast(img, _):
     return ImageOps.autocontrast(img)
 
@@ -20,148 +33,173 @@ def _equalize(img, _):
     return ImageOps.equalize(img)
 
 
-def _rotate(img, v, fillcolor=FILL_COLOR):
-    return img.rotate(v, fillcolor=fillcolor)
+def _invert(img, _):
+    return ImageOps.invert(img)
 
 
-def _solarize(img, v):
-    return ImageOps.solarize(img, int(v))
+def _rotate(img, val):
+    # val is in degrees [-30, 30]
+    return img.rotate(val, resample=Image.BILINEAR)
 
 
-def _color(img, v):
-    return ImageEnhance.Color(img).enhance(v)
-
-
-def _contrast(img, v):
-    return ImageEnhance.Contrast(img).enhance(v)
-
-
-def _brightness(img, v):
-    return ImageEnhance.Brightness(img).enhance(v)
-
-
-def _sharpness(img, v):
-    return ImageEnhance.Sharpness(img).enhance(v)
-
-
-def _shear_x(img, v, fillcolor=FILL_COLOR):
-    return img.transform(img.size, Image.AFFINE, (1, v, 0, 0, 1, 0), fillcolor=fillcolor)
-
-
-def _shear_y(img, v, fillcolor=FILL_COLOR):
-    return img.transform(img.size, Image.AFFINE, (1, 0, 0, v, 1, 0), fillcolor=fillcolor)
-
-
-def _translate_x(img, v, fillcolor=FILL_COLOR):
-    # v in [-0.3, 0.3] relative to width
-    shift = v * img.size[0]
-    return img.transform(img.size, Image.AFFINE, (1, 0, shift, 0, 1, 0), fillcolor=fillcolor)
-
-
-def _translate_y(img, v, fillcolor=FILL_COLOR):
-    # v in [-0.3, 0.3] relative to height
-    shift = v * img.size[1]
-    return img.transform(img.size, Image.AFFINE, (1, 0, 0, 0, 1, shift), fillcolor=fillcolor)
-
-
-def _posterize(img, v):
-    bits = max(1, min(8, int(v)))
+def _posterize(img, val):
+    # val in [4, 8] bits
+    bits = max(1, min(8, int(val)))
     return ImageOps.posterize(img, bits)
 
 
-# List of candidate RandAugment operations with (function, min_val, max_val)
-RANDAUG_CANDIDATES = [
-    (_auto_contrast, 0, 1),
-    (_equalize, 0, 1),
-    (_rotate, -30, 30),
-    (_solarize, 0, 256),
-    (_color, 0.05, 0.95),
-    (_contrast, 0.05, 0.95),
-    (_brightness, 0.05, 0.95),
-    (_sharpness, 0.05, 0.95),
-    (_shear_x, -0.3, 0.3),
-    (_shear_y, -0.3, 0.3),
-    (_translate_x, -0.3, 0.3),
-    (_translate_y, -0.3, 0.3),
-    (_posterize, 4, 8),
-]
+def _solarize(img, val):
+    # val in [0, 256] threshold
+    thresh = int(val)
+    return ImageOps.solarize(img, thresh)
+
+
+def _solarize_add(img, val):
+    threshold = 128
+    lut = []
+    for i in range(256):
+        if i < threshold:
+            lut.append(min(255, i + int(val)))
+        else:
+            lut.append(i)
+    return img.point(lut)
+
+
+def _color(img, val):
+    # val in [0.1, 1.9]
+    return ImageEnhance.Color(img).enhance(val)
+
+
+def _contrast(img, val):
+    # val in [0.1, 1.9]
+    return ImageEnhance.Contrast(img).enhance(val)
+
+
+def _brightness(img, val):
+    # val in [0.1, 1.9]
+    return ImageEnhance.Brightness(img).enhance(val)
+
+
+def _sharpness(img, val):
+    # val in [0.1, 1.9]
+    return ImageEnhance.Sharpness(img).enhance(val)
+
+
+def _shear_x(img, val):
+    # val in [-0.3, 0.3]
+    return img.transform(img.size, Image.AFFINE, (1, val, 0, 0, 1, 0), resample=Image.BILINEAR)
+
+
+def _shear_y(img, val):
+    # val in [-0.3, 0.3]
+    return img.transform(img.size, Image.AFFINE, (1, 0, 0, val, 1, 0), resample=Image.BILINEAR)
+
+
+def _translate_x(img, val):
+    # val in [-0.3, 0.3] fraction of width
+    offset = int(val * img.size[0])
+    return img.transform(img.size, Image.AFFINE, (1, 0, offset, 0, 1, 0), resample=Image.BILINEAR)
+
+
+def _translate_y(img, val):
+    # val in [-0.3, 0.3] fraction of height
+    offset = int(val * img.size[1])
+    return img.transform(img.size, Image.AFFINE, (1, 0, 0, 0, 1, offset), resample=Image.BILINEAR)
 
 
 class VideoRandAugment:
     """
-    Video-level RandAugment from FixMatch (Sohn et al., 2020).
-    Sampled operations and parameters are applied consistently across all frames of a clip
-    to maintain temporal coherence.
+    Video RandAugment policy matching FixMatch / MMAction2:
+    Randomly chooses N transformations from a pool of 13 operations,
+    evaluating them with random sign (+/-) and applying identically across all frames.
     """
     def __init__(self, n=2, m=10):
         self.n = n
         self.m = m
 
-    def __call__(self, pil_frames):
-        # Choose n random operations
-        chosen_ops = random.choices(RANDAUG_CANDIDATES, k=self.n)
-        
-        # Determine continuous parameter values based on magnitude m in [0, 30]
-        params = []
-        for op, minval, maxval in chosen_ops:
-            val = (float(self.m) / 30.0) * float(maxval - minval) + minval
-            params.append((op, val))
+    def _get_random_sign(self):
+        return 1.0 if random.random() < 0.5 else -1.0
 
-        # Apply each operation to all frames in the clip
-        augmented_frames = []
-        for img in pil_frames:
-            res_img = img
-            for op, val in params:
-                res_img = op(res_img, val)
-            augmented_frames.append(res_img)
+    def _sample_op(self):
+        sign = self._get_random_sign()
+        ops = [
+            (_auto_contrast, 0),
+            (_equalize, 0),
+            (_rotate, sign * float(self.m) / 30.0 * 30.0),                     # [-30, 30] deg
+            (_solarize, 256.0 - float(self.m) / 30.0 * 256.0),                # [0, 256]
+            (_color, 1.0 + sign * float(self.m) / 30.0 * 0.9),                # [0.1, 1.9]
+            (_contrast, 1.0 + sign * float(self.m) / 30.0 * 0.9),             # [0.1, 1.9]
+            (_brightness, 1.0 + sign * float(self.m) / 30.0 * 0.9),           # [0.1, 1.9]
+            (_sharpness, 1.0 + sign * float(self.m) / 30.0 * 0.9),            # [0.1, 1.9]
+            (_shear_x, sign * float(self.m) / 30.0 * 0.3),                    # [-0.3, 0.3]
+            (_shear_y, sign * float(self.m) / 30.0 * 0.3),                    # [-0.3, 0.3]
+            (_translate_x, sign * float(self.m) / 30.0 * 0.3),                # [-0.3, 0.3]
+            (_translate_y, sign * float(self.m) / 30.0 * 0.3),                # [-0.3, 0.3]
+            (_posterize, 8 - int(float(self.m) / 30.0 * 4.0)),                # [4, 8]
+        ]
+        return random.choice(ops)
 
-        return augmented_frames
+    def __call__(self, clip):
+        sampled_ops = [self._sample_op() for _ in range(self.n)]
+        processed = clip
+        for op, val in sampled_ops:
+            processed = _apply_op_to_clip(processed, op, val)
+        return processed, sampled_ops
 
+    def apply_preset_ops(self, clip, sampled_ops):
+        """Apply already-sampled operations to a second modality (e.g. TG) for exact alignment."""
+        processed = clip
+        for op, val in sampled_ops:
+            processed = _apply_op_to_clip(processed, op, val)
+        return processed
+
+
+# ==============================================================================
+# 2. Synchronized Video Cutout (128x128 Patch across all frames)
+# ==============================================================================
 
 class VideoCutout:
     """
-    Video-level Cutout: removes a square patch (e.g. 128x128 as specified in F2-FixMatch Section 4.2)
-    at the exact same spatial coordinates across all frames of the clip.
+    Applies spatial cutout of a fixed size (128x128 in paper Section 4.2).
+    The square patch is zeroed/masked consistently across all frames of the clip.
     """
     def __init__(self, size=128):
         self.size = size
 
-    def __call__(self, pil_frames):
-        if len(pil_frames) == 0:
-            return pil_frames
+    def sample_patch(self, w, h):
+        half = self.size // 2
+        cx = random.randint(0, w)
+        cy = random.randint(0, h)
+        x1 = max(0, cx - half)
+        y1 = max(0, cy - half)
+        x2 = min(w, cx + half)
+        y2 = min(h, cy + half)
+        return x1, y1, x2, y2
 
-        w, h = pil_frames[0].size
-        cut_w = min(self.size, w)
-        cut_h = min(self.size, h)
+    def __call__(self, clip, patch=None):
+        if len(clip) == 0:
+            return clip, patch
+        w, h = clip[0].size
+        if patch is None:
+            patch = self.sample_patch(w, h)
+        x1, y1, x2, y2 = patch
 
-        x0 = random.randint(0, max(0, w - cut_w))
-        y0 = random.randint(0, max(0, h - cut_h))
-
-        cut_frames = []
-        for img in pil_frames:
-            arr = np.array(img, copy=True)
-            arr[y0:y0+cut_h, x0:x0+cut_w] = FILL_COLOR
-            cut_frames.append(Image.fromarray(arr))
-
-        return cut_frames
+        processed = []
+        for frame in clip:
+            f = frame.copy()
+            # Draw black box over cutout region
+            black_box = Image.new('RGB', (x2 - x1, y2 - y1), (0, 0, 0))
+            f.paste(black_box, (x1, y1))
+            processed.append(f)
+        return processed, patch
 
 
-# -------------------------------------------------------------
-# Spatial Geometric Transforms for Video Clips
-# -------------------------------------------------------------
-def video_resize_and_crop(pil_frames, min_size=256, max_size=320, crop_size=224, is_train=True):
-    """
-    Weak augmentation spatial pipeline:
-    1. Resize shorter side randomly sampled in [min_size, max_size] (or min_size for test).
-    2. Random crop (train) or center crop (test) to (crop_size, crop_size).
-    3. Random horizontal flip with p=0.5 (train only).
-    Applied consistently to all frames in the clip.
-    """
-    if len(pil_frames) == 0:
-        return pil_frames
+# ==============================================================================
+# 3. Synchronized Spatial Resizing, Cropping, and Flipping
+# ==============================================================================
 
-    orig_w, orig_h = pil_frames[0].size
-
+def sample_crop_parameters(orig_w, orig_h, min_size=256, max_size=320, crop_size=224, is_train=True):
+    """Samples geometric parameters once so multiple modalities share identical crops and flips."""
     if is_train:
         target_short = random.randint(min_size, max_size)
     else:
@@ -174,7 +212,6 @@ def video_resize_and_crop(pil_frames, min_size=256, max_size=320, crop_size=224,
         new_w = target_short
         new_h = int(round(orig_h * (target_short / float(orig_w))))
 
-    # Crop coordinates
     new_w = max(new_w, crop_size)
     new_h = max(new_h, crop_size)
 
@@ -186,6 +223,28 @@ def video_resize_and_crop(pil_frames, min_size=256, max_size=320, crop_size=224,
         crop_x = (new_w - crop_size) // 2
         crop_y = (new_h - crop_size) // 2
         flip = False
+
+    return {
+        'new_w': new_w,
+        'new_h': new_h,
+        'crop_x': crop_x,
+        'crop_y': crop_y,
+        'crop_size': crop_size,
+        'flip': flip
+    }
+
+
+def apply_crop_parameters(pil_frames, params):
+    """Applies preset spatial crop and flip parameters to a video clip."""
+    if len(pil_frames) == 0:
+        return pil_frames
+
+    new_w = params['new_w']
+    new_h = params['new_h']
+    crop_x = params['crop_x']
+    crop_y = params['crop_y']
+    crop_size = params['crop_size']
+    flip = params['flip']
 
     processed = []
     for frame in pil_frames:
@@ -204,9 +263,7 @@ def normalize_clip(frames_array):
     Output: torch.Tensor of shape (3, T, H, W) normalized with ImageNet mean and std.
     """
     import torch
-    # (T, H, W, 3) -> (T, 3, H, W) -> float -> normalize -> (3, T, H, W)
     arr = frames_array.astype(np.float32)
-    # Subtract mean and divide by std
     arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
     tensor = torch.from_numpy(arr).permute(3, 0, 1, 2)  # (3, T, H, W)
     return tensor
