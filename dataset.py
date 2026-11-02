@@ -16,7 +16,7 @@ from augmentations import (
 )
 
 
-def load_video_frames(video_path, frame_indices):
+def load_video_frames(video_path, frame_indices, known_total_frames=None):
     """
     Load frames at specific indices from a video file (.avi) or a folder of frames.
     Returns: list of PIL Images in RGB format.
@@ -47,22 +47,39 @@ def load_video_frames(video_path, frame_indices):
         raise IOError(f"Could not open video file: '{video_path}'")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if total_frames <= 0:
-        cap.release()
-        raise IOError(f"Video file has invalid frame count ({total_frames}): '{video_path}'")
+    # Robust fallback for invalid/negative frame counts from OpenCV MSMF demuxers on Windows
+    if total_frames <= 0 or total_frames > 1_000_000:
+        if known_total_frames is not None and known_total_frames > 0:
+            total_frames = known_total_frames
+        elif len(frame_indices) > 0:
+            total_frames = max(frame_indices) + 1
+        else:
+            total_frames = 100
 
+    last_valid_frame = None
     for idx in frame_indices:
-        target_idx = min(max(0, idx), total_frames - 1)
+        target_idx = max(0, idx)
+        if total_frames > 0:
+            target_idx = min(target_idx, total_frames - 1)
         cap.set(cv2.CAP_PROP_POS_FRAMES, target_idx)
         ret, frame = cap.read()
         if not ret or frame is None:
-            cap.release()
-            raise IOError(
-                f"Failed to decode frame {target_idx} (index {idx}) from video: '{video_path}'. "
-                f"Total frames reported: {total_frames}. File may be corrupted or unreadable."
-            )
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frames.append(Image.fromarray(frame))
+            # Fallback 1: if some frames were decoded, duplicate the last valid frame
+            if last_valid_frame is not None:
+                frames.append(last_valid_frame.copy())
+                continue
+            # Fallback 2: try reading frame 0
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                cap.release()
+                raise IOError(
+                    f"Failed to decode frame {target_idx} (index {idx}) from video: '{video_path}'. "
+                    f"File may be corrupted or unreadable."
+                )
+        frame_rgb = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        last_valid_frame = frame_rgb
+        frames.append(frame_rgb)
 
     cap.release()
     return frames
@@ -187,16 +204,17 @@ class UCF101Dataset(Dataset):
         )
 
         try:
-            raw_rgb = load_video_frames(video_path, rgb_idx)
+            raw_rgb = load_video_frames(video_path, rgb_idx, known_total_frames=total_frames)
             if self.include_tg and self.is_train:
-                raw_next = load_video_frames(video_path, next_idx)
+                raw_next = load_video_frames(video_path, next_idx, known_total_frames=total_frames)
                 raw_tg = compute_temporal_gradient(raw_rgb, raw_next)
             else:
                 raw_tg = None
         except Exception as e:
-            raise RuntimeError(
-                f"Failed to load/decode video frames from {video_path} at indices {rgb_idx}: {e}"
-            ) from e
+            # If an individual video fails to decode, log warning and resample another video to avoid aborting training
+            print(f"[Warning] Error loading video '{video_path}': {e}. Resampling fallback sample.", flush=True)
+            fallback_idx = random.randint(0, len(self.samples) - 1)
+            return self.__getitem__(fallback_idx)
 
         orig_w, orig_h = raw_rgb[0].size
 

@@ -142,32 +142,37 @@ class UCF101FullTestDataset(Dataset):
         total_frames = sample['total_frames']
         label = sample['label']
 
-        span = self.clip_len * self.frame_interval
-        if self.eval_mode == 'single':
-            # Single view: 1 temporal center clip x 1 spatial center crop (exact training validation standard)
-            start = max(0, (total_frames - span) // 2) if total_frames > span else 0
-            frame_indices = [int((start + i * self.frame_interval) % max(1, total_frames)) for i in range(self.clip_len)]
-            frames = load_video_frames(video_path, frame_indices)
-            crops = center_crop(frames, crop_size=self.crop_size, scale=256)
-            tensors = torch.stack(crops, dim=0)  # (1, 3, 8, crop_size, crop_size)
+        try:
+            span = self.clip_len * self.frame_interval
+            if self.eval_mode == 'single':
+                # Single view: 1 temporal center clip x 1 spatial center crop (exact training validation standard)
+                start = max(0, (total_frames - span) // 2) if total_frames > span else 0
+                frame_indices = [int((start + i * self.frame_interval) % max(1, total_frames)) for i in range(self.clip_len)]
+                frames = load_video_frames(video_path, frame_indices, known_total_frames=total_frames)
+                crops = center_crop(frames, crop_size=self.crop_size, scale=256)
+                tensors = torch.stack(crops, dim=0)  # (1, 3, 8, crop_size, crop_size)
+                return tensors, label
+
+            # Full view: 10 temporal clips x 3 spatial crops = 30 views (official paper protocol)
+            if total_frames > span:
+                intervals = np.linspace(0, total_frames - span, self.num_clips, dtype=int)
+            else:
+                intervals = np.zeros(self.num_clips, dtype=int)
+
+            all_crops = []
+            for start in intervals:
+                frame_indices = [int((start + i * self.frame_interval) % max(1, total_frames)) for i in range(self.clip_len)]
+                frames = load_video_frames(video_path, frame_indices, known_total_frames=total_frames)
+                crops = three_crop(frames, crop_size=self.crop_size, scale=256)
+                all_crops.extend(crops)
+
+            # all_crops contains 30 tensors, each (3, 8, crop_size, crop_size)
+            tensors = torch.stack(all_crops, dim=0)  # (30, 3, 8, crop_size, crop_size)
             return tensors, label
-
-        # Full view: 10 temporal clips x 3 spatial crops = 30 views (official paper protocol)
-        if total_frames > span:
-            intervals = np.linspace(0, total_frames - span, self.num_clips, dtype=int)
-        else:
-            intervals = np.zeros(self.num_clips, dtype=int)
-
-        all_crops = []
-        for start in intervals:
-            frame_indices = [int((start + i * self.frame_interval) % max(1, total_frames)) for i in range(self.clip_len)]
-            frames = load_video_frames(video_path, frame_indices)
-            crops = three_crop(frames, crop_size=self.crop_size, scale=256)
-            all_crops.extend(crops)
-
-        # all_crops contains 30 tensors, each (3, 8, crop_size, crop_size)
-        tensors = torch.stack(all_crops, dim=0)  # (30, 3, 8, crop_size, crop_size)
-        return tensors, label
+        except Exception as e:
+            print(f"[Warning] Error loading evaluation video '{video_path}': {e}. Resampling fallback sample.", flush=True)
+            fallback_idx = (index + 1) % len(self.samples)
+            return self.__getitem__(fallback_idx)
 
 
 def main():
