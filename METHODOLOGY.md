@@ -329,3 +329,47 @@ To accurately replicate published benchmark numbers, test evaluation follows the
 | **Spatial Dropout Probability** | Set to `0.2` in `FeaturePerturbator`. | **Resolved**: Updated default to `p = 0.5` matching Section 3.2. |
 | **Gradient Accumulation** | Potential under-scaling on terminal leftover batches. | **Resolved**: Dynamically scales by `min(accum_steps, len(loader) - current_window_start)`. |
 | **Dataset Failures** | Silent fallback to black dummy frames masked corrupted data or bad paths. | **Resolved**: Replaced with explicit `RuntimeError` tracking for fail-fast data integrity. |
+
+---
+
+## 8. MMAction2 Modular Framework Architecture
+
+As documented in Tu et al. (ACM TOMM 2025, Section 4.2), the reference research code is built upon the **MMAction2** video understanding framework. To achieve faithful scientific reproduction without fragile C++/CUDA build failures on Windows/Python 3.13, the repository incorporates a pure-PyTorch MMAction2 modular engine:
+
+```mermaid
+flowchart TD
+    Config["MMAction2 Config (.py)<br/>configs/f2_fixmatch/..."] --> Builder["MMAction2 Registry & Builders"]
+    Builder --> Backbone["Backbone: ResNet3d (depth=18, Table 2)"]
+    Builder --> Heads["Heads: I3DHead (3D) & F2Head (TAP)"]
+    Builder --> Perturbator["Perturbator: FeaturePerturbator (P-Aug)"]
+    Builder --> Recognizer["Recognizer: F2FixMatchRecognizer3D"]
+    
+    DataConfig["Data Pipeline Config"] --> Dataset["RawframeDataset / SemiRawframeDataset"]
+    Dataset --> Compose["Compose Transforms"]
+    Compose --> Sampler["SampleFrames (clip_len=8, stride=8)"]
+    Compose --> Decoder["RawFrameDecode (dynamic TG)"]
+    Compose --> Spatial["RandomResizedCrop (Weak, synched)"]
+    Compose --> RandAug["VideoRandAugment + VideoCutout (Strong, synched)"]
+    Compose --> EvalCrop["ThreeCrop (10 clips x 3 crops = 30 views)"]
+
+    Recognizer --> TrainRunner["tools/train.py & train_*.py"]
+    Recognizer --> TestRunner["tools/test.py & evaluate.py"]
+```
+
+### Module Layout
+1. **`mmaction/models/`**:
+   - `backbones/resnet3d.py`: 3D-ResNet18 matching Table 2 (conv1 $1\times 7\times 7, 64$, pool1 $1\times 3\times 3$, res2-res3 2D, res4-res5 inflated 3D).
+   - `heads/i3d_head.py`: 3D spatio-temporal classification head (`I3DHead`).
+   - `heads/f2_head.py`: 2D temporal-average-pooled classification head (`F2Head`).
+   - `perturbator/paug.py`: Progressive feature perturbator (`FeaturePerturbator`) with TAP, Spatial Dropout ($p=0.5$), Feature CutMix ($p=0.5$), and Feature Flip ($p=0.5$).
+   - `recognizers/`:
+     - `recognizer3d.py`: Supervised 3D baseline (`Recognizer3D`).
+     - `fixmatch_recognizer.py`: FixMatch baseline (`FixMatchRecognizer3D`) with joint pass for unified BatchNorm tracking.
+     - `f2_fixmatch_recognizer.py`: Full $F^2$-FixMatch (`F2FixMatchRecognizer3D`) with bi-modal RGB+TG, P-Aug, MPL, and loss weighting ($\alpha=2, \beta=2, \gamma=1$).
+2. **`mmaction/datasets/`**:
+   - `pipelines/`: Modular transforms matching MMAction2 (`SampleFrames`, `RawFrameDecode`, `RandomResizedCrop`, `CenterCrop`, `VideoRandAugment`, `VideoCutout`, `ThreeCrop`, `Normalize`, `FormatShape`, `Collect`).
+   - `rawframe_dataset.py`: `RawframeDataset` for supervised training and validation.
+   - `semi_dataset.py`: `SemiRawframeDataset` for semi-supervised training with synchronized RGB and TG augmentations.
+3. **`configs/`**: MMAction2 standard Python configuration files for Supervised, FixMatch, and $F^2$-FixMatch.
+4. **`tools/`**: Standard MMAction2 training (`tools/train.py`) and 30-view evaluation (`tools/test.py`) runners.
+
