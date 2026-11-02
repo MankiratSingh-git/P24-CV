@@ -40,14 +40,25 @@ def set_rng_states(states):
     """Restore full RNG states to exactly continue an interrupted experiment."""
     if not states or not isinstance(states, dict):
         return
-    if 'torch_rng_state' in states and states['torch_rng_state'] is not None:
-        torch.set_rng_state(states['torch_rng_state'])
-    if 'cuda_rng_state' in states and states['cuda_rng_state'] is not None and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(states['cuda_rng_state'])
-    if 'numpy_rng_state' in states and states['numpy_rng_state'] is not None:
-        np.random.set_state(states['numpy_rng_state'])
-    if 'python_rng_state' in states and states['python_rng_state'] is not None:
-        random.setstate(states['python_rng_state'])
+    try:
+        if 'torch_rng_state' in states and states['torch_rng_state'] is not None:
+            torch_state = states['torch_rng_state']
+            if isinstance(torch_state, torch.Tensor):
+                torch_state = torch_state.cpu()
+            torch.set_rng_state(torch_state)
+        if 'cuda_rng_state' in states and states['cuda_rng_state'] is not None and torch.cuda.is_available():
+            cuda_states = states['cuda_rng_state']
+            if isinstance(cuda_states, list):
+                cuda_states = [s.cpu() if isinstance(s, torch.Tensor) else s for s in cuda_states]
+            elif isinstance(cuda_states, torch.Tensor):
+                cuda_states = cuda_states.cpu()
+            torch.cuda.set_rng_state_all(cuda_states)
+        if 'numpy_rng_state' in states and states['numpy_rng_state'] is not None:
+            np.random.set_state(states['numpy_rng_state'])
+        if 'python_rng_state' in states and states['python_rng_state'] is not None:
+            random.setstate(states['python_rng_state'])
+    except Exception as e:
+        print(f"=> [Warning] Could not restore RNG state: {e}. Continuing with active RNG.")
 
 
 def load_checkpoint(filepath, map_location=None):
