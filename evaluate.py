@@ -11,6 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 from models.resnet3d import ResNet3D18, F2FixMatchModel
 from augmentations import IMAGENET_MEAN, IMAGENET_STD
 from dataset import load_video_frames
+from mmaction.core.random_seed import load_checkpoint
 
 
 def three_crop(pil_frames, crop_size=224, scale=256):
@@ -188,7 +189,7 @@ def main():
     print(f"Evaluation Mode: {args.eval_mode} | Crop Size: {args.crop_size}x{args.crop_size} | Device: {device}")
     print("=" * 60)
 
-    checkpoint = torch.load(args.checkpoint, map_location=device)
+    checkpoint = load_checkpoint(args.checkpoint, map_location=device)
     state_dict = checkpoint.get('model_state_dict', checkpoint)
 
     # Detect model type

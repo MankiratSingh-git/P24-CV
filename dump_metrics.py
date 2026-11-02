@@ -3,6 +3,7 @@ import sys
 import json
 import argparse
 import torch
+from mmaction.core.random_seed import load_checkpoint
 
 
 def dump_checkpoint_metrics(ckpt_path):
@@ -10,7 +11,7 @@ def dump_checkpoint_metrics(ckpt_path):
         print(f"File not found: {ckpt_path}")
         return
 
-    ckpt = torch.load(ckpt_path, map_location='cpu')
+    ckpt = load_checkpoint(ckpt_path, map_location='cpu')
     epoch = ckpt.get('epoch', 'N/A')
     val_top1 = ckpt.get('val_top1', 'N/A')
     val_top5 = ckpt.get('val_top5', 'N/A')

@@ -13,6 +13,7 @@ from mmaction.utils.config import Config
 from mmaction.models.builder import build_recognizer
 from mmaction.datasets.builder import build_dataset, build_dataloader
 from mmaction.core.evaluation import top_k_accuracy
+from mmaction.core.random_seed import load_checkpoint
 
 
 def parse_args():
@@ -38,7 +39,7 @@ def main():
 
     # 1. Build Model
     model = build_recognizer(cfg.model, test_cfg=cfg.get('test_cfg'))
-    ckpt = torch.load(args.checkpoint, map_location=device)
+    ckpt = load_checkpoint(args.checkpoint, map_location=device)
     state_dict = ckpt['model_state_dict'] if 'model_state_dict' in ckpt else ckpt
     model.load_state_dict(state_dict)
     model = model.to(device)

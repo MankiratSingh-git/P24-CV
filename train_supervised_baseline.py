@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from models.resnet3d import ResNet3D18
 from dataset import UCF101Dataset
-from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states
+from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states, load_checkpoint
 
 
 def parse_args():
@@ -137,7 +137,7 @@ def main():
     if args.resume:
         if os.path.isfile(args.resume):
             print(f"=> Loading checkpoint '{args.resume}'...")
-            checkpoint = torch.load(args.resume, map_location=device)
+            checkpoint = load_checkpoint(args.resume, map_location=device)
             model.load_state_dict(checkpoint['model_state_dict'])
             if 'optimizer_state_dict' in checkpoint:
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

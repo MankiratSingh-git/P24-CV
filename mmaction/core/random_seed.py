@@ -48,3 +48,15 @@ def set_rng_states(states):
         np.random.set_state(states['numpy_rng_state'])
     if 'python_rng_state' in states and states['python_rng_state'] is not None:
         random.setstate(states['python_rng_state'])
+
+
+def load_checkpoint(filepath, map_location=None):
+    """
+    Safely load checkpoints across PyTorch versions, handling PyTorch 2.6+
+    default weights_only=True restriction when unpickling optimizer and RNG states.
+    """
+    try:
+        return torch.load(filepath, map_location=map_location, weights_only=False)
+    except TypeError:
+        return torch.load(filepath, map_location=map_location)
+

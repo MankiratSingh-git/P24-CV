@@ -18,7 +18,7 @@ from mmaction.utils.config import Config
 from mmaction.models.builder import build_recognizer
 from mmaction.datasets.builder import build_dataset, build_dataloader
 from mmaction.core.evaluation import top_k_accuracy
-from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states
+from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states, load_checkpoint
 
 
 def parse_args():
@@ -138,7 +138,7 @@ def main():
     resume_path = args.resume if args.resume else cfg.get('resume_from', None)
     if resume_path and os.path.isfile(resume_path):
         print(f"=> Resuming from checkpoint: {resume_path}")
-        ckpt = torch.load(resume_path, map_location=device)
+        ckpt = load_checkpoint(resume_path, map_location=device)
         model.load_state_dict(ckpt['model_state_dict'])
         if 'optimizer_state_dict' in ckpt:
             optimizer.load_state_dict(ckpt['optimizer_state_dict'])
