@@ -150,6 +150,10 @@ MPL enforces consistency by driving all three perturbed predictions to align wit
 * Frame-weak, feature-perturbed loss: $\mathcal{L}_u^{w\_p}$ (weight $\beta = 2.0$, evaluated with $C_{TAP}$)
 * Frame-strong, feature-perturbed loss: $\mathcal{L}_u^{s\_p}$ (weight $\gamma = 1.0$, evaluated with $C_{TAP}$)
 
+Supervised loss (Section 3.5, Equation 13) is the unweighted sum across both RGB ($V$) and Temporal Gradient ($G$) modalities:
+$$\mathcal{L}_s = \mathcal{L}_s^V + \mathcal{L}_s^G = \text{CE}(C_{3D}(Z_l^V), y) + \text{CE}(C_{3D}(Z_l^G), y)$$
+
+Total objective function:
 $$\mathcal{L} = \mathcal{L}_s + \alpha \mathcal{L}_u^s + \beta \mathcal{L}_u^{w\_p} + \gamma \mathcal{L}_u^{s\_p}$$
 
 ---
@@ -246,6 +250,10 @@ Only RGB frames are evaluated at test time, requiring zero optical flow or tempo
 | **P-Aug Feature Gradient Flow** | `torch.no_grad()` on $Z_w$ feature extraction blocked backpropagation from $\mathcal{L}_u^{w\_p}$ into the backbone. | **Resolved**: $Z_w$ computed with gradients enabled; only pseudo-label assignment is detached. Gradients verified flowing directly to backbone `conv1` (`grad.sum() > 0`). |
 | **FixMatch Joint Forward / BatchNorm** | Labeled, weak, and strong batches were forwarded separately, drifting BatchNorm statistics. | **Resolved**: Joint concatenation `[labeled, weak, strong]` in single forward pass; verified unified BatchNorm tracking. |
 | **RandAugment Signs** | Deterministic parameter sign directions for rotation, shear, and translation. | **Resolved**: Uniform random $\pm$ sign sampling implemented across all 13 transformation operations in `augmentations.py` and `mmaction/datasets/pipelines/augmentations.py`. |
+| **Supervised Loss Scaling** | $\mathcal{L}_s$ was computed as `0.5 * (loss_s_rgb + loss_s_tg)`, halving supervised gradients relative to unsupervised losses. | **Resolved**: Aligned to Equation 13 ($\mathcal{L}_s = \mathcal{L}_s^V + \mathcal{L}_s^G$), restoring exact paper loss balance without the 0.5 attenuation factor. |
+| **Evaluation Mode Integrity** | `--eval-mode single` called `three_crop()` returning 3 spatial views instead of 1 center view. | **Resolved**: Added dedicated `center_crop()` in `evaluate.py`; `--eval-mode single` evaluates strictly 1 view, `--eval-mode full` evaluates 30 views. |
+| **Per-Sample P-Aug Independence** | Feature horizontal flip and CutMix were sampled across the entire batch at once. | **Resolved**: Made feature flip and CutMix independent Bernoulli trials per video sample in the mini-batch using `torch.rand(b) < p`. |
+| **Checkpoint Selection Bias** | Using the 3,783 validation/test videos for peak epoch selection introduces selection bias. | **Resolved**: All training runners now explicitly save both `final_model.pth` (zero-selection-bias converged model at final epoch) and `best_model.pth` (peak in-training validation model), allowing both protocols to be evaluated and compared transparently. |
 | **Spatial Dropout Probability** | Set to `0.2` in `FeaturePerturbator`. | **Resolved**: Updated default to $p = 0.5$ matching Section 3.2. |
 | **Gradient Accumulation** | Potential under-scaling on terminal leftover batches. | **Resolved**: Dynamically scales by `min(accum_steps, len(loader) - current_window_start)`. |
 | **Dataset Failures** | Silent fallback to black dummy frames masked corrupted data or bad paths. | **Resolved**: Replaced with explicit `RuntimeError` tracking for fail-fast data integrity. |

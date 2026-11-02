@@ -292,6 +292,15 @@ def main():
             'rng_state': get_rng_states(),
         }, os.path.join(work_dir, "latest_checkpoint.pth"))
 
+        if (epoch + 1) == total_epochs:
+            torch.save({
+                'epoch': epoch + 1,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'best_val_top1': best_val_top1,
+                'rng_state': get_rng_states(),
+            }, os.path.join(work_dir, "final_model.pth"))
+
     elapsed = time.time() - start_time
     print("=" * 65)
     print(f"Training completed in {elapsed / 3600:.2f} hours. Best Val Top-1: {best_val_top1:.2f}%")

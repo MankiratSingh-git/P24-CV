@@ -208,7 +208,7 @@ def main():
 
             loss_s_rgb = ce_loss_fn(logits_rgb_l, targets_l)
             loss_s_tg = ce_loss_fn(logits_tg_l, targets_l)
-            loss_s = 0.5 * (loss_s_rgb + loss_s_tg)
+            loss_s = loss_s_rgb + loss_s_tg  # Equation 13: L_s = L_s^V + L_s^G (exact sum, not average)
             total_loss = loss_s
 
             loss_u_s_val = 0.0
@@ -375,6 +375,15 @@ def main():
             'best_val_top1': best_val_top1,
             'rng_state': get_rng_states(),
         }, os.path.join(args.output_dir, "latest_checkpoint.pth"))
+
+        if (epoch + 1) == args.epochs:
+            torch.save({
+                'epoch': epoch + 1,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'best_val_top1': best_val_top1,
+                'rng_state': get_rng_states(),
+            }, os.path.join(args.output_dir, "final_model.pth"))
 
     elapsed = time.time() - start_time
     import json

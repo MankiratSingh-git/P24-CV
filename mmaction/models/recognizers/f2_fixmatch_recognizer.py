@@ -84,7 +84,7 @@ class F2FixMatchRecognizer3D(BaseRecognizer):
 
         loss_s_rgb = F.cross_entropy(logits_rgb_l, gt_labels)
         loss_s_tg = F.cross_entropy(logits_tg_l, gt_labels)
-        loss_s = 0.5 * (loss_s_rgb + loss_s_tg)
+        loss_s = loss_s_rgb + loss_s_tg  # Equation 13: L_s = L_s^V + L_s^G (exact sum, not average)
 
         loss_dict = dict(
             loss_s=loss_s,
