@@ -33,31 +33,35 @@ def load_video_frames(video_path, frame_indices):
             raise ValueError(f"No frames found in directory: {video_path}")
         for idx in frame_indices:
             clamped_idx = min(max(0, idx), total - 1)
-            img = Image.open(all_imgs[clamped_idx]).convert('RGB')
+            img_path = all_imgs[clamped_idx]
+            try:
+                img = Image.open(img_path).convert('RGB')
+            except Exception as e:
+                raise IOError(f"Failed to read/decode frame image '{img_path}' in directory '{video_path}': {e}") from e
             frames.append(img)
         return frames
 
     # Otherwise read directly from video file via OpenCV
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        raise IOError(f"Could not open video file: {video_path}")
+        raise IOError(f"Could not open video file: '{video_path}'")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if total_frames <= 0:
-        total_frames = 1
+        cap.release()
+        raise IOError(f"Video file has invalid frame count ({total_frames}): '{video_path}'")
 
     for idx in frame_indices:
         target_idx = min(max(0, idx), total_frames - 1)
         cap.set(cv2.CAP_PROP_POS_FRAMES, target_idx)
         ret, frame = cap.read()
         if not ret or frame is None:
-            # Fallback: rewind or duplicate previous
-            if len(frames) > 0:
-                frame = np.array(frames[-1])
-            else:
-                frame = np.zeros((240, 320, 3), dtype=np.uint8)
-        else:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            cap.release()
+            raise IOError(
+                f"Failed to decode frame {target_idx} (index {idx}) from video: '{video_path}'. "
+                f"Total frames reported: {total_frames}. File may be corrupted or unreadable."
+            )
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frames.append(Image.fromarray(frame))
 
     cap.release()

@@ -13,41 +13,33 @@ from augmentations import IMAGENET_MEAN, IMAGENET_STD
 from dataset import load_video_frames
 
 
-def three_crop_256(pil_frames, crop_size=256):
+def three_crop(pil_frames, crop_size=224, scale=256):
     """
-    Takes 3 spatial crops (left/top, center, right/bottom) of size 256x256
-    after scaling shorter side to 256 pixels, as specified in Section 4.2.
+    Takes 3 spatial crops (left/top, center, right/bottom) of size crop_size x crop_size
+    after scaling shorter side to scale (default 256 pixels), as in MMAction2 and Section 4.2.
     """
     orig_w, orig_h = pil_frames[0].size
     if orig_h < orig_w:
-        new_h = crop_size
-        new_w = int(round(orig_w * (crop_size / float(orig_h))))
+        new_h = scale
+        new_w = int(round(orig_w * (scale / float(orig_h))))
     else:
-        new_w = crop_size
-        new_h = int(round(orig_h * (crop_size / float(orig_w))))
+        new_w = scale
+        new_h = int(round(orig_h * (scale / float(orig_w))))
 
     new_w = max(new_w, crop_size)
     new_h = max(new_h, crop_size)
 
     crops_indices = []
-    if new_w > crop_size:
-        # 3 horizontal crops: left, center, right
-        step = (new_w - crop_size) / 2.0
-        crops_indices = [
-            (0, 0),
-            (int(round(step)), 0),
-            (new_w - crop_size, 0)
-        ]
-    elif new_h > crop_size:
-        # 3 vertical crops: top, center, bottom
-        step = (new_h - crop_size) / 2.0
-        crops_indices = [
-            (0, 0),
-            (0, int(round(step))),
-            (0, new_h - crop_size)
-        ]
+    if new_w >= new_h:
+        # 3 horizontal crops along longer side: left, center, right
+        y_offset = (new_h - crop_size) // 2
+        x_offsets = [0, (new_w - crop_size) // 2, new_w - crop_size]
+        crops_indices = [(x, y_offset) for x in x_offsets]
     else:
-        crops_indices = [(0, 0), (0, 0), (0, 0)]
+        # 3 vertical crops along longer side: top, center, bottom
+        x_offset = (new_w - crop_size) // 2
+        y_offsets = [0, (new_h - crop_size) // 2, new_h - crop_size]
+        crops_indices = [(x_offset, y) for y in y_offsets]
 
     crop_tensors = []
     for (x0, y0) in crops_indices:
@@ -127,11 +119,8 @@ class UCF101FullTestDataset(Dataset):
         all_crops = []
         for start in intervals:
             frame_indices = [int((start + i * self.frame_interval) % max(1, total_frames)) for i in range(self.clip_len)]
-            try:
-                frames = load_video_frames(video_path, frame_indices)
-            except Exception:
-                frames = [Image.fromarray(np.zeros((256, 256, 3), dtype=np.uint8)) for _ in range(self.clip_len)]
-            crops = three_crop_256(frames, crop_size=self.crop_size)
+            frames = load_video_frames(video_path, frame_indices)
+            crops = three_crop(frames, crop_size=self.crop_size, scale=256)
             all_crops.extend(crops)
 
         # all_crops contains 30 tensors, each (3, 8, crop_size, crop_size)
@@ -148,7 +137,7 @@ def main():
     parser.add_argument("--model-type", type=str, default="auto", choices=["auto", "resnet", "f2"], help="Model architecture")
     parser.add_argument("--eval-mode", type=str, default="full", choices=["single", "full"],
                         help="'single' = 1-clip center-crop, 'full' = 10-clip x 3-crop (30 views, official paper protocol)")
-    parser.add_argument("--crop-size", type=int, default=256, help="Spatial crop resolution (256 in Section 4.2 of paper)")
+    parser.add_argument("--crop-size", type=int, default=224, help="Spatial crop resolution (224 matches 3D-ResNet-18 input; 256 supported)")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
