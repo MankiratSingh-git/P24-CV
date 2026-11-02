@@ -216,7 +216,7 @@ The 3D-ResNet-18 backbone adopts inflated spatio-temporal convolutions matching 
 
 In video action recognition, training-time validation on a single center crop typically under-reports performance by 4%–6% compared to multi-crop ensembling. To benchmark against published figures, evaluation follows the official 30-view protocol (Section 5):
 1. **10 Uniform Temporal Clips**: The video duration is divided uniformly into 10 temporal starting points.
-2. **3 Spatial Crops per Clip**: Shorter side resized to 256; crops extracted at left/top, center, and right/bottom at $224 \times 224$ (or $256 \times 256$).
+2. **3 Spatial Crops per Clip**: Shorter side resized to 256; three $256 \times 256$ spatial crops extracted at left/top, center, and right/bottom (Section 4.2). Yields 30 evaluation tensors of shape $(3, 8, 256, 256)$.
 3. **Multi-View Ensembling**: Yields $10 \times 3 = 30$ views per video. Softmax predictions across all 30 views are averaged:
    $$\bar{P}(y \mid X) = \frac{1}{30} \sum_{v=1}^{30} \text{Softmax}\left( F\left(x^{(v)}\right) \right)$$
    $$\hat{y} = \arg\max \bar{P}(y \mid X)$$
@@ -252,6 +252,7 @@ Only RGB frames are evaluated at test time, requiring zero optical flow or tempo
 | **RandAugment Signs** | Deterministic parameter sign directions for rotation, shear, and translation. | **Resolved**: Uniform random $\pm$ sign sampling implemented across all 13 transformation operations in `augmentations.py` and `mmaction/datasets/pipelines/augmentations.py`. |
 | **Supervised Loss Scaling** | $\mathcal{L}_s$ was computed as `0.5 * (loss_s_rgb + loss_s_tg)`, halving supervised gradients relative to unsupervised losses. | **Resolved**: Aligned to Equation 13 ($\mathcal{L}_s = \mathcal{L}_s^V + \mathcal{L}_s^G$), restoring exact paper loss balance without the 0.5 attenuation factor. |
 | **Evaluation Mode Integrity** | `--eval-mode single` called `three_crop()` returning 3 spatial views instead of 1 center view. | **Resolved**: Added dedicated `center_crop()` in `evaluate.py`; `--eval-mode single` evaluates strictly 1 view, `--eval-mode full` evaluates 30 views. |
+| **Test Crop Resolution** | Test pipelines defaulted to $224 \times 224$ crops instead of $256 \times 256$ specified in Section 4.2. | **Resolved**: Aligned `ThreeCrop` crop size and `evaluate.py` `--crop-size` default to $256 \times 256$ across all configuration files and test runners. |
 | **Per-Sample P-Aug Independence** | Feature horizontal flip and CutMix were sampled across the entire batch at once. | **Resolved**: Made feature flip and CutMix independent Bernoulli trials per video sample in the mini-batch using `torch.rand(b) < p`. |
 | **Checkpoint Selection Bias** | Using the 3,783 validation/test videos for peak epoch selection introduces selection bias. | **Resolved**: All training runners now explicitly save both `final_model.pth` (zero-selection-bias converged model at final epoch) and `best_model.pth` (peak in-training validation model), allowing both protocols to be evaluated and compared transparently. |
 | **Spatial Dropout Probability** | Set to `0.2` in `FeaturePerturbator`. | **Resolved**: Updated default to $p = 0.5$ matching Section 3.2. |
