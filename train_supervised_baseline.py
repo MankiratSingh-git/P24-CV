@@ -1,4 +1,6 @@
 import os
+os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
+os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 import sys
 import argparse
 import time

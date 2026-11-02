@@ -1,4 +1,6 @@
 import os
+os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
+os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 import sys
 import argparse
 import time
@@ -360,6 +362,7 @@ def main():
 
         # Validation
         if (epoch + 1) % args.eval_freq == 0 or (epoch + 1) == args.epochs:
+            print(f"--> [Epoch {epoch+1:03d}] Evaluating validation set ({len(val_loader.dataset)} videos)...", flush=True)
             val_top1, val_top5 = evaluate(model, val_loader, device)
             is_best = val_top1 > best_val_top1
             if is_best:

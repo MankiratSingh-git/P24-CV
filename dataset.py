@@ -1,8 +1,12 @@
 import os
+os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
+os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 import glob
 import random
 import numpy as np
 import cv2
+if hasattr(cv2, 'utils') and hasattr(cv2.utils, 'logging'):
+    cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
 from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader
