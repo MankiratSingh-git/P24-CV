@@ -52,6 +52,16 @@ img_norm_cfg = dict(
     std=[58.395, 57.12, 57.375]
 )
 
+train_labeled_pipeline = [
+    dict(type='SampleFrames', clip_len=8, frame_interval=8, num_clips=1, test_mode=False),
+    dict(type='RawFrameDecode', include_tg=True),
+    dict(type='RandomResizedCrop', min_size=256, max_size=320, crop_size=224, flip_ratio=0.5, is_train=True),
+    dict(type='Normalize', **img_norm_cfg),
+    dict(type='FormatShape', input_format='NCTHW'),
+    dict(type='ToTensor', keys=['imgs', 'imgs_tg', 'label']),
+    dict(type='Collect', keys=['imgs', 'imgs_tg', 'label'])
+]
+
 val_pipeline = [
     dict(type='SampleFrames', clip_len=8, frame_interval=8, num_clips=1, test_mode=True),
     dict(type='RawFrameDecode'),
@@ -80,6 +90,7 @@ data = dict(
         type='RawframeDataset',
         ann_file=f'{splits_dir}/ucf101_train_{labeled_percent}_percent_labeled_split_{split}_rawframes.txt',
         data_prefix=data_root,
+        pipeline=train_labeled_pipeline,
         include_tg=True
     ),
     train_unlabeled=dict(
@@ -110,5 +121,4 @@ total_epochs = 220
 warmup_epochs = 40
 accum_steps = 2
 eval_freq = 5
-accum_steps = 2
 work_dir = 'checkpoints/f2_fixmatch'

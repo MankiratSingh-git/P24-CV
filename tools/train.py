@@ -188,9 +188,15 @@ def main():
                         batch_u[k] = batch_u[k].to(device, non_blocking=True)
 
                 if cfg.model.type == 'F2FixMatchRecognizer3D':
+                    if 'imgs_tg' not in batch_l:
+                        raise KeyError(
+                            "F2FixMatchRecognizer3D requires 'imgs_tg' in the labeled batch for bi-modal supervised loss, "
+                            "but 'imgs_tg' was not found in batch_l. Ensure the labeled data pipeline includes "
+                            "RawFrameDecode(include_tg=True) and Collect(keys=['imgs', 'imgs_tg', 'label'])."
+                        )
                     loss_dict = model.forward_train(
                         imgs_rgb_l=batch_l['imgs'],
-                        imgs_tg_l=batch_l.get('imgs_tg', batch_l['imgs']),
+                        imgs_tg_l=batch_l['imgs_tg'],
                         labels=batch_l['label'],
                         rgb_w=batch_u['rgb_w'],
                         rgb_s=batch_u['rgb_s'],
