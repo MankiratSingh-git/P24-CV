@@ -71,3 +71,36 @@ def load_checkpoint(filepath, map_location=None):
     except TypeError:
         return torch.load(filepath, map_location=map_location)
 
+
+def safe_load_optimizer_state(optimizer, state_dict, model=None):
+    """
+    Safely load optimizer state dict, handling parameter count mismatches
+    (e.g., when new heads like C_TAP are decoupled during architecture evolution).
+    Preserves momentum buffers and hyperparameters for existing weights.
+    """
+    if state_dict is None or not isinstance(state_dict, dict):
+        return
+    try:
+        optimizer.load_state_dict(state_dict)
+    except (ValueError, KeyError) as e:
+        print(f"=> [Note] Adapting optimizer state to match current parameters: {e}")
+        try:
+            saved_param_groups = state_dict.get('param_groups', [])
+            if saved_param_groups and optimizer.param_groups:
+                saved_group = saved_param_groups[0]
+                cur_group = optimizer.param_groups[0]
+                for k, v in saved_group.items():
+                    if k != 'params':
+                        cur_group[k] = v
+                num_saved = len(saved_group.get('params', []))
+                saved_states = state_dict.get('state', {})
+                if model is not None:
+                    cur_params = list(model.parameters())
+                    for old_idx in range(min(num_saved, len(cur_params))):
+                        if old_idx in saved_states:
+                            cur_p = cur_params[old_idx]
+                            optimizer.state[cur_p] = saved_states[old_idx]
+                    print(f"=> Restored momentum buffers for {len(optimizer.state)}/{len(cur_params)} parameters.")
+        except Exception as adapt_err:
+            print(f"=> [Warning] Could not adapt optimizer state: {adapt_err}. Optimizer will reinitialize momentum.")
+

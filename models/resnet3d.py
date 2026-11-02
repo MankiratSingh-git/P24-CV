@@ -34,37 +34,47 @@ class ResNet3D18(ResNet3d):
     def __init__(self, num_classes=101, dropout_ratio=0.5, **kwargs):
         super().__init__(depth=18, **kwargs)
 
-        # Classifier head for 3D spatio-temporal features
+        # Classifier head for 3D spatio-temporal features (C_3D, Section 3.4)
         self.avgpool3d = nn.AdaptiveAvgPool3d((1, 1, 1))
-        # Classifier head for 2D TAP (Temporal-Avg-Pooled) features
+        # Classifier head for 2D TAP (Temporal-Avg-Pooled) features (C_TAP, Section 3.4)
         self.avgpool2d = nn.AdaptiveAvgPool2d((1, 1))
 
         self.dropout = nn.Dropout(p=dropout_ratio)
         self.fc = nn.Linear(512, num_classes)
+        self.fc_tap = nn.Linear(512, num_classes)
 
         self._init_head_weights()
 
     def _init_head_weights(self):
         nn.init.normal_(self.fc.weight, 0, 0.01)
         nn.init.constant_(self.fc.bias, 0)
+        nn.init.normal_(self.fc_tap.weight, 0, 0.01)
+        nn.init.constant_(self.fc_tap.bias, 0)
 
     def extract_feat(self, x):
         """Extract high-level feature representation Z in R^{B x 512 x 8 x 7 x 7}."""
         return super().forward(x)
 
     def forward_3d_feat(self, feat):
-        """Pass 3D feature through pooling, dropout, and FC head."""
+        """Pass 3D feature through pooling, dropout, and C_3D FC head."""
         pooled = self.avgpool3d(feat).flatten(1)
         dropped = self.dropout(pooled)
         logits = self.fc(dropped)
         return logits
 
     def forward_tap_feat(self, feat_2d):
-        """Pass 2D TAP feature through pooling, dropout, and FC head."""
+        """Pass 2D TAP feature through pooling, dropout, and C_TAP FC head."""
         pooled = self.avgpool2d(feat_2d).flatten(1)
         dropped = self.dropout(pooled)
-        logits = self.fc(dropped)
+        logits = self.fc_tap(dropped)
         return logits
+
+    def load_state_dict(self, state_dict, strict=True):
+        """Handle backward compatibility when loading checkpoints without fc_tap."""
+        if 'fc_tap.weight' not in state_dict and 'fc.weight' in state_dict:
+            state_dict['fc_tap.weight'] = state_dict['fc.weight'].clone()
+            state_dict['fc_tap.bias'] = state_dict['fc.bias'].clone()
+        return super().load_state_dict(state_dict, strict=strict)
 
     def forward(self, x):
         """Standard end-to-end forward pass."""
@@ -116,3 +126,10 @@ class F2FixMatchModel(nn.Module):
     def forward_eval(self, x):
         """Evaluation forward pass (RGB only)."""
         return self.backbone(x)
+
+    def load_state_dict(self, state_dict, strict=True):
+        """Handle backward compatibility when loading checkpoints without fc_tap."""
+        if 'backbone.fc_tap.weight' not in state_dict and 'backbone.fc.weight' in state_dict:
+            state_dict['backbone.fc_tap.weight'] = state_dict['backbone.fc.weight'].clone()
+            state_dict['backbone.fc_tap.bias'] = state_dict['backbone.fc.bias'].clone()
+        return super().load_state_dict(state_dict, strict=strict)

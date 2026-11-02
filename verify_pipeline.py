@@ -185,6 +185,48 @@ def test_topk_evaluation():
     print(f"    [OK] Top-1: {top1:.1f}%, Top-5: {top5:.1f}%")
 
 
+def test_standalone_f2_and_optimizer():
+    print("[-] 7. Testing Standalone F2FixMatchModel Decoupled Head & Optimizer Adapter...")
+    from models.resnet3d import ResNet3D18, F2FixMatchModel
+    from mmaction.core.random_seed import safe_load_optimizer_state
+
+    # 1. Decoupled heads exist
+    m = F2FixMatchModel(num_classes=101)
+    assert hasattr(m.backbone, 'fc') and hasattr(m.backbone, 'fc_tap')
+    assert m.backbone.fc.weight.shape == (101, 512)
+    assert m.backbone.fc_tap.weight.shape == (101, 512)
+
+    # 2. Checkpoint backward compatibility
+    dummy_old_sd = {k: v.clone() for k, v in m.state_dict().items() if 'fc_tap' not in k}
+    dummy_old_sd['backbone.fc.weight'] += 0.5
+    m2 = F2FixMatchModel(num_classes=101)
+    m2.load_state_dict(dummy_old_sd)
+    assert torch.allclose(m2.backbone.fc_tap.weight, dummy_old_sd['backbone.fc.weight'])
+
+    # 3. Optimizer state adaptation
+    old_params = [p for n, p in m.named_parameters() if 'fc_tap' not in n]
+    opt_old = torch.optim.SGD(old_params, lr=0.2, momentum=0.9, weight_decay=1e-4)
+    for p in old_params:
+        p.grad = torch.randn_like(p)
+    opt_old.step()
+
+    opt_new = torch.optim.SGD(m.parameters(), lr=0.2, momentum=0.9, weight_decay=1e-4)
+    safe_load_optimizer_state(opt_new, opt_old.state_dict(), m)
+
+    # 4. Gradient isolation between C_3D and C_TAP
+    m.zero_grad()
+    z_w = torch.randn(2, 512, 8, 7, 7)
+    _, logits_wp = m.forward_paug(z_w.detach())
+    loss_wp = logits_wp.sum()
+    loss_wp.backward()
+    assert m.backbone.fc_tap.weight.grad is not None
+    assert m.backbone.fc.weight.grad is None
+
+    # Step optimizer
+    opt_new.step()
+    print("    [OK] Standalone F2FixMatchModel decoupled heads & optimizer adapter verified!")
+
+
 if __name__ == "__main__":
     print("=" * 65)
     print("MMAction2 Refactoring Verification Suite")
@@ -195,6 +237,7 @@ if __name__ == "__main__":
     test_fixmatch_joint_forward()
     test_f2_fixmatch_gradient_flow()
     test_topk_evaluation()
+    test_standalone_f2_and_optimizer()
     print("=" * 65)
     print("All MMAction2 Refactored Modules & Verification Tests PASSED!")
     print("=" * 65)

@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from models.resnet3d import ResNet3D18
 from dataset import UCF101Dataset
-from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states, load_checkpoint
+from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states, load_checkpoint, safe_load_optimizer_state
 
 
 def parse_args():
@@ -142,7 +142,7 @@ def main():
             checkpoint = load_checkpoint(args.resume, map_location=device)
             model.load_state_dict(checkpoint['model_state_dict'])
             if 'optimizer_state_dict' in checkpoint:
-                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                safe_load_optimizer_state(optimizer, checkpoint['optimizer_state_dict'], model)
             if 'rng_state' in checkpoint:
                 set_rng_states(checkpoint['rng_state'])
                 print("=> Restored full RNG state (Python, NumPy, PyTorch CPU/CUDA)")

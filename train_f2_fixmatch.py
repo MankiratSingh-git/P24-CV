@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 from models.resnet3d import F2FixMatchModel
 from dataset import UCF101Dataset
-from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states, load_checkpoint
+from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states, load_checkpoint, safe_load_optimizer_state
 
 
 def parse_args():
@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument("--alpha", type=float, default=2.0, help="Weight for frame-level strong-aug loss L_u^s")
     parser.add_argument("--beta", type=float, default=2.0, help="Weight for frame-&feature weak-aug loss L_u^{w_p}")
     parser.add_argument("--gamma", type=float, default=1.0, help="Weight for frame-&feature strong-aug loss L_u^{s_p}")
-    parser.add_argument("--rampup-epochs", type=int, default=10, help="Epochs to linearly ramp up unsupervised loss after warmup (default: 10)")
+    parser.add_argument("--rampup-epochs", type=int, default=30, help="Epochs to linearly ramp up unsupervised loss after warmup (default: 30)")
     parser.add_argument("--accum-steps", type=int, default=2, help="Gradient accumulation steps to imitate 2-GPU mini-batch (Section 4.2)")
 
     # System settings
@@ -170,7 +170,7 @@ def main():
             checkpoint = load_checkpoint(args.resume, map_location=device)
             model.load_state_dict(checkpoint['model_state_dict'])
             if 'optimizer_state_dict' in checkpoint:
-                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                safe_load_optimizer_state(optimizer, checkpoint['optimizer_state_dict'], model)
             if 'rng_state' in checkpoint:
                 set_rng_states(checkpoint['rng_state'])
                 print("=> Restored full RNG state (Python, NumPy, PyTorch CPU/CUDA)")
