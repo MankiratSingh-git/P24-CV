@@ -5,7 +5,8 @@ Faithfully reproduces Tu et al. (ACM TOMM 2025):
 2. Progressive Augmentation (P-Aug): 4 feature types (Z_w, Z_s, Z_{w_p}, Z_{s_p}) via FeaturePerturbator.
 3. Multihead Pseudo-Labeling (MPL): Weak RGB + TG prediction aggregation, tau=0.3 thresholding,
    and 3-way consistency alignment weighted by alpha=2, beta=2, gamma=1.
-4. Preserves full gradient flow from L_u^{w_p} back through 3D backbone.
+4. Stabilized teacher-student gradient flow: detaches Z_w to prevent mode collapse
+   and supports post-warmup loss ramp-up.
 """
 
 import torch
@@ -53,6 +54,7 @@ class F2FixMatchRecognizer3D(BaseRecognizer):
         # Hyperparameters
         self.threshold = self.train_cfg.get('threshold', 0.3)
         self.warmup_epochs = self.train_cfg.get('warmup_epochs', 40)
+        self.rampup_epochs = self.train_cfg.get('rampup_epochs', 10)
         self.alpha = self.train_cfg.get('alpha', 2.0)
         self.beta = self.train_cfg.get('beta', 2.0)
         self.gamma = self.train_cfg.get('gamma', 1.0)
@@ -103,16 +105,18 @@ class F2FixMatchRecognizer3D(BaseRecognizer):
         bz_u = rgb_w.size(0)
 
         # -------------------------------------------------------------
-        # 2. Extract Weak Features with Gradients Intact for P-Aug
+        # 2. Extract Weak Features under torch.no_grad()
+        # Weak views act strictly as teacher (pseudo-label generator).
+        # Detaching Z_w prevents mode collapse and circular gradient feedback.
         # -------------------------------------------------------------
-        z_w_rgb = self.extract_feat(rgb_w)
-        logits_w_rgb = self.cls_head_3d(z_w_rgb)
-
-        z_w_tg = self.extract_feat(tg_w)
-        logits_w_tg = self.cls_head_3d(z_w_tg)
-
-        # Multihead Pseudo-Labeling (MPL) aggregation: targets detached
         with torch.no_grad():
+            z_w_rgb = self.extract_feat(rgb_w)
+            logits_w_rgb = self.cls_head_3d(z_w_rgb)
+
+            z_w_tg = self.extract_feat(tg_w)
+            logits_w_tg = self.cls_head_3d(z_w_tg)
+
+            # Multihead Pseudo-Labeling (MPL) aggregation: targets detached
             p_w_rgb = F.softmax(logits_w_rgb, dim=-1)
             p_w_tg = F.softmax(logits_w_tg, dim=-1)
             p_w_agg = 0.5 * (p_w_rgb + p_w_tg)
@@ -136,11 +140,12 @@ class F2FixMatchRecognizer3D(BaseRecognizer):
             loss_u_s = (loss_u_s_rgb + loss_u_s_tg) / (2.0 * float(bz_u))
 
             # --- P-Aug: Z_{w_p} (frame weak, feature perturbed) ---
-            # Gradients flow smoothly back through z_w to backbone
-            feat_wp_rgb = self.perturbator(z_w_rgb)
+            # z_w is detached to prevent self-training mode collapse into trivial representations;
+            # gradients flow into the TAP classification head.
+            feat_wp_rgb = self.perturbator(z_w_rgb.detach())
             logits_wp_rgb = self.cls_head_tap(feat_wp_rgb)
 
-            feat_wp_tg = self.perturbator(z_w_tg)
+            feat_wp_tg = self.perturbator(z_w_tg.detach())
             logits_wp_tg = self.cls_head_tap(feat_wp_tg)
 
             loss_u_wp_rgb = F.cross_entropy(logits_wp_rgb[conf_idx], conf_labels, reduction='sum')
@@ -158,9 +163,15 @@ class F2FixMatchRecognizer3D(BaseRecognizer):
             loss_u_sp_tg = F.cross_entropy(logits_sp_tg[conf_idx], conf_labels, reduction='sum')
             loss_u_sp = (loss_u_sp_rgb + loss_u_sp_tg) / (2.0 * float(bz_u))
 
-            loss_dict['loss_u_s'] = self.alpha * loss_u_s
-            loss_dict['loss_u_wp'] = self.beta * loss_u_wp
-            loss_dict['loss_u_sp'] = self.gamma * loss_u_sp
+            # Linear rampup of unsupervised loss post-warmup
+            if self.rampup_epochs > 0:
+                rampup_weight = min(1.0, float(cur_epoch - self.warmup_epochs + 1) / float(self.rampup_epochs))
+            else:
+                rampup_weight = 1.0
+
+            loss_dict['loss_u_s'] = rampup_weight * self.alpha * loss_u_s
+            loss_dict['loss_u_wp'] = rampup_weight * self.beta * loss_u_wp
+            loss_dict['loss_u_sp'] = rampup_weight * self.gamma * loss_u_sp
 
         loss_dict['conf_samples'] = num_confident
         loss_dict['total_u_samples'] = bz_u

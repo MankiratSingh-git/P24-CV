@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument("--alpha", type=float, default=2.0, help="Weight for frame-level strong-aug loss L_u^s")
     parser.add_argument("--beta", type=float, default=2.0, help="Weight for frame-&feature weak-aug loss L_u^{w_p}")
     parser.add_argument("--gamma", type=float, default=1.0, help="Weight for frame-&feature strong-aug loss L_u^{s_p}")
+    parser.add_argument("--rampup-epochs", type=int, default=10, help="Epochs to linearly ramp up unsupervised loss after warmup (default: 10)")
     parser.add_argument("--accum-steps", type=int, default=2, help="Gradient accumulation steps to imitate 2-GPU mini-batch (Section 4.2)")
 
     # System settings
@@ -100,7 +101,7 @@ def main():
     print(f"Dataset: UCF-101 ({args.labeled_percent}% labeled) | Split: {args.split}")
     unlabeled_bs = args.batch_size_unlabeled if args.batch_size_unlabeled is not None else args.batch_size * args.mu
     print(f"Batch Size: B_l={args.batch_size}, B_u={unlabeled_bs}")
-    print(f"Loss Weights: alpha={args.alpha}, beta={args.beta}, gamma={args.gamma} | Tau: {args.threshold}")
+    print(f"Loss Weights: alpha={args.alpha}, beta={args.beta}, gamma={args.gamma} | Tau: {args.threshold} | Rampup: {args.rampup_epochs} epochs")
     print("=" * 65)
 
     # Dataset filepaths
@@ -174,6 +175,18 @@ def main():
             start_epoch = checkpoint.get('epoch', 0)
             best_val_top1 = checkpoint.get('best_val_top1', checkpoint.get('val_top1', 0.0))
             print(f"=> Resumed from Epoch {start_epoch} (Best Val Top-1: {best_val_top1:.2f}%)")
+
+            # Load and prune previous history up to start_epoch
+            hist_file = os.path.join(args.output_dir, "training_history.json")
+            if os.path.isfile(hist_file):
+                try:
+                    import json
+                    with open(hist_file, "r") as f:
+                        old_history = json.load(f)
+                        history = [h for h in old_history if h.get("epoch", 0) <= start_epoch]
+                    print(f"=> Preserved {len(history)} prior history entries up to Epoch {start_epoch}")
+                except Exception as e:
+                    print(f"=> Note: Could not load prior history: {e}")
         else:
             print(f"[Warning] Checkpoint '{args.resume}' not found! Starting training from scratch.")
 
@@ -220,6 +233,7 @@ def main():
             # -------------------------------------------------------------
             # 2. Unsupervised P-Aug + MPL Loss (After Warmup)
             # -------------------------------------------------------------
+            rampup_weight = 0.0
             if epoch >= args.warmup_epochs:
                 try:
                     unlabeled_batch = next(unlabeled_iter)
@@ -234,16 +248,23 @@ def main():
                 tg_s = tg_s.to(device, non_blocking=True)
                 bz_u = rgb_w.size(0)
 
-                # Extract features for weakly augmented RGB and TG
-                # Note: Gradients are preserved so P-Aug features backpropagate through the backbone
-                z_w_rgb = model.forward_backbone(rgb_w)
-                logits_w_rgb = model.forward_logits(z_w_rgb)
+                # Linear ramp-up weight after warmup
+                if args.rampup_epochs > 0:
+                    rampup_weight = min(1.0, float(epoch - args.warmup_epochs + 1) / float(args.rampup_epochs))
+                else:
+                    rampup_weight = 1.0
 
-                z_w_tg = model.forward_backbone(tg_w)
-                logits_w_tg = model.forward_logits(z_w_tg)
-
-                # Multihead Pseudo-Labeling (MPL) aggregation: targets are detached
+                # Extract features for weakly augmented RGB and TG under torch.no_grad()
+                # Weak views act strictly as the teacher (pseudo-label generator).
+                # Detaching Z_w prevents mode collapse and circular gradient feedback.
                 with torch.no_grad():
+                    z_w_rgb = model.forward_backbone(rgb_w)
+                    logits_w_rgb = model.forward_logits(z_w_rgb)
+
+                    z_w_tg = model.forward_backbone(tg_w)
+                    logits_w_tg = model.forward_logits(z_w_tg)
+
+                    # Multihead Pseudo-Labeling (MPL) aggregation: targets are detached
                     p_w_rgb = F.softmax(logits_w_rgb, dim=-1)
                     p_w_tg = F.softmax(logits_w_tg, dim=-1)
                     p_w_agg = 0.5 * (p_w_rgb + p_w_tg)
@@ -256,6 +277,7 @@ def main():
                     conf_labels = pseudo_labels[conf_idx]
 
                     # --- Frame-level Strong Augmentation features Z_s ---
+                    # Strongly augmented views act as the student; gradients flow to backbone
                     z_s_rgb = model.forward_backbone(rgb_s)
                     logits_s_rgb = model.forward_logits(z_s_rgb)
 
@@ -267,15 +289,17 @@ def main():
                     loss_u_s = (loss_u_s_rgb + loss_u_s_tg) / (2.0 * float(bz_u))
 
                     # --- P-Aug: Feature-level perturbation on Z_w and Z_s ---
-                    # Z_{w_p}: frame weak, feature perturbed (gradients flow through z_w to backbone)
-                    _, logits_wp_rgb = model.forward_paug(z_w_rgb)
-                    _, logits_wp_tg = model.forward_paug(z_w_tg)
+                    # Z_{w_p}: frame weak, feature perturbed.
+                    # z_w is detached to prevent self-training collapse into trivial representations;
+                    # gradients flow into the TAP classification head.
+                    _, logits_wp_rgb = model.forward_paug(z_w_rgb.detach())
+                    _, logits_wp_tg = model.forward_paug(z_w_tg.detach())
 
                     loss_u_wp_rgb = F.cross_entropy(logits_wp_rgb[conf_idx], conf_labels, reduction='sum')
                     loss_u_wp_tg = F.cross_entropy(logits_wp_tg[conf_idx], conf_labels, reduction='sum')
                     loss_u_wp = (loss_u_wp_rgb + loss_u_wp_tg) / (2.0 * float(bz_u))
 
-                    # Z_{s_p}: frame strong, feature perturbed
+                    # Z_{s_p}: frame strong, feature perturbed (gradients flow through z_s to backbone)
                     _, logits_sp_rgb = model.forward_paug(z_s_rgb)
                     _, logits_sp_tg = model.forward_paug(z_s_tg)
 
@@ -283,12 +307,14 @@ def main():
                     loss_u_sp_tg = F.cross_entropy(logits_sp_tg[conf_idx], conf_labels, reduction='sum')
                     loss_u_sp = (loss_u_sp_rgb + loss_u_sp_tg) / (2.0 * float(bz_u))
 
-                    # Total Loss: L = L_s + alpha * L_u^s + beta * L_u^{w_p} + gamma * L_u^{s_p}
+                    # Total Loss: L = L_s + rampup * (alpha * L_u^s + beta * L_u^{w_p} + gamma * L_u^{s_p})
                     total_loss = (
                         total_loss + 
-                        args.alpha * loss_u_s + 
-                        args.beta * loss_u_wp + 
-                        args.gamma * loss_u_sp
+                        rampup_weight * (
+                            args.alpha * loss_u_s + 
+                            args.beta * loss_u_wp + 
+                            args.gamma * loss_u_sp
+                        )
                     )
 
                     loss_u_s_val = loss_u_s.item()
@@ -322,11 +348,12 @@ def main():
         avg_loss_usp = running_loss_u_sp / max(1, num_batches)
         conf_ratio = (total_confident_samples / max(1, total_unlabeled_samples)) * 100.0
 
+        ramp_str = f" | Ramp: {rampup_weight:.2f}" if (args.rampup_epochs > 0 and epoch >= args.warmup_epochs and rampup_weight < 1.0) else ""
         if (epoch + 1) % 5 == 0 or epoch == 0 or epoch == args.warmup_epochs:
             print(
                 f"Epoch [{epoch+1:03d}/{args.epochs:03d}] | LR: {current_lr:.5f} | "
                 f"L_S: {avg_loss_s:.4f} | L_u_s: {avg_loss_us:.4f} | "
-                f"L_u_wp: {avg_loss_uwp:.4f} | L_u_sp: {avg_loss_usp:.4f} | "
+                f"L_u_wp: {avg_loss_uwp:.4f} | L_u_sp: {avg_loss_usp:.4f}{ramp_str} | "
                 f"Pseudo Mask: {conf_ratio:.1f}% ({total_confident_samples}/{total_unlabeled_samples})",
                 flush=True
             )
@@ -359,6 +386,7 @@ def main():
                 "loss_u_s": round(avg_loss_us, 4),
                 "loss_u_wp": round(avg_loss_uwp, 4),
                 "loss_u_sp": round(avg_loss_usp, 4),
+                "rampup_weight": round(rampup_weight, 2) if epoch >= args.warmup_epochs else 0.0,
                 "pseudo_mask_percent": round(conf_ratio, 2),
                 "val_top1": round(val_top1, 2),
                 "val_top5": round(val_top5, 2)

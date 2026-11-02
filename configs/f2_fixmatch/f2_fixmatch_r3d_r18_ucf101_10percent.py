@@ -34,6 +34,7 @@ model = dict(
     train_cfg=dict(
         threshold=0.3,
         warmup_epochs=40,
+        rampup_epochs=10,
         alpha=2.0,
         beta=2.0,
         gamma=1.0

@@ -31,6 +31,7 @@ def parse_args():
     parser.add_argument("--weight-decay", type=float, default=1e-4, help="SGD weight decay")
     parser.add_argument("--threshold", type=float, default=0.3, help="Confidence threshold tau (0.3 in paper)")
     parser.add_argument("--lambda-u", type=float, default=1.0, help="Unsupervised loss weight")
+    parser.add_argument("--rampup-epochs", type=int, default=10, help="Epochs to linearly ramp up unsupervised loss after warmup (default: 10)")
     parser.add_argument("--accum-steps", type=int, default=2, help="Gradient accumulation steps to imitate 2-GPU mini-batch (Section 4.2)")
 
     # System / Dataloader settings
@@ -98,7 +99,7 @@ def main():
     print(f"Labeled Percentage: {args.labeled_percent}% | Split: {args.split}")
     unlabeled_bs = args.batch_size_unlabeled if args.batch_size_unlabeled is not None else args.batch_size * args.mu
     print(f"Batch Size: Labeled={args.batch_size}, Unlabeled={unlabeled_bs}")
-    print(f"Total Epochs: {args.epochs} (Warmup: {args.warmup_epochs}) | Tau: {args.threshold} | LR: {args.lr}")
+    print(f"Total Epochs: {args.epochs} (Warmup: {args.warmup_epochs}, Rampup: {args.rampup_epochs}) | Tau: {args.threshold} | LR: {args.lr}")
     print("=" * 60)
 
     # Dataset filepaths
@@ -229,9 +230,15 @@ def main():
                     mask = (max_probs >= args.threshold)
                     num_confident = mask.sum().item()
 
+                # Linear rampup of unsupervised loss post-warmup
+                if args.rampup_epochs > 0:
+                    rampup_weight = min(1.0, float(epoch - args.warmup_epochs + 1) / float(args.rampup_epochs))
+                else:
+                    rampup_weight = 1.0
+
                 if num_confident > 0:
                     loss_u = F.cross_entropy(logits_u_s[mask], pseudo_labels[mask], reduction='sum') / float(bz_u)
-                    loss = loss_s + args.lambda_u * loss_u
+                    loss = loss_s + rampup_weight * args.lambda_u * loss_u
                     loss_u_val = loss_u.item()
                     total_confident_samples += num_confident
                 else:
