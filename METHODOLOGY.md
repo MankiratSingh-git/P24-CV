@@ -129,12 +129,16 @@ $$x_t^G = \frac{x_t^V - x_{t+1}^V + 255}{2}, \quad x_t^G \in [0, 255]$$
 ### 3.2 Progressive Augmentation (P-Aug)
 Standard video augmentation operates solely at the frame level, where spatial perturbations can be offset by adjacent contextual frames. P-Aug applies progressive perturbations across both frame and latent feature representations:
 1. **Frame-Level Weak Augmentation ($A_w$)**: Resize shorter side to $[256, 320]$, random crop $224 \times 224$, horizontal flip with probability $0.5$.
-2. **Frame-Level Strong Augmentation ($A_s$)**: Applies $A_w$, followed by Video RandAugment (2 sampled operations from 13 transforms with uniform $\pm$ directional signs) and Video Cutout (masking a $128 \times 128$ square patch across all frames).
+2. **Frame-Level Strong Augmentation ($A_s$)**: Applies $A_w$, followed by Video RandAugment (2 sampled operations from 13 transforms, with uniform random $\pm$ signs for directional transforms adopted as an implementation choice pending source verification) and Video Cutout (masking a $128 \times 128$ square patch across all frames).
 3. **Feature-Level Perturbation ($A_{feat}$)**:
    * **Temporal-Average-Pooling (TAP)**: Averages 3D feature $Z \in \mathbb{R}^{B \times 512 \times T \times H \times W}$ along the temporal dimension $T$, producing $Z_{TAP} \in \mathbb{R}^{B \times 512 \times H \times W}$.
    * **Spatial Dropout ($p = 0.5$)**: Randomly zeroes feature activations across the 2D spatial grid.
-   * **Feature Horizontal Flip ($p = 0.5$)**: Randomly mirrors features along the horizontal spatial axis.
-   * **Feature CutMix / Noise Injection ($p = 0.5$)**: Randomly pastes a spatial patch from another sample in the batch into the target sample feature map.
+   * **Feature Horizontal Flip ($p = 0.5$)**: Randomly mirrors features along the horizontal spatial axis (implemented per-sample).
+   * **Feature CutMix / Noise Injection ($p = 0.5$)**: Randomly pastes a spatial patch from another sample in the batch into the target sample feature map (implemented per-sample).
+
+> [!NOTE] Implementation Choices: Sampling Granularity & Transform Directions
+> * **Per-Sample P-Aug Sampling**: Feature horizontal flip and CutMix are applied as independent Bernoulli trials per sample (`torch.rand(b) < p`) rather than applied uniformly to the entire batch. The paper does not specify the sampling granularity of feature-level perturbations; this per-sample vectorization is an implementation choice adopted to enhance intra-batch feature diversity, not a confirmed paper correction.
+> * **RandAugment Directional Signs**: Uniform random sampling of $\pm$ sign directions for rotation, shear, and translation is an implementation choice adopted to prevent directional bias, pending verification against original source code.
 
 This produces 4 complementary feature representations for each modality:
 $$Z_w = E(A_w(x)), \quad Z_s = E(A_s(x))$$
@@ -188,11 +192,11 @@ The 3D-ResNet-18 backbone adopts inflated spatio-temporal convolutions matching 
 | Input Resolution | $224 \times 224$ pixels |
 | Weak Augmentation Scale | Shorter side resized in $[256, 320]$ |
 | Weak Augmentation Flip Ratio | 0.5 |
-| RandAugment Operations | $N = 2, M = 10$ (13 ops, uniform $\pm$ signs) |
+| RandAugment Operations | $N = 2, M = 10$ (13 ops; random $\pm$ signs as implementation choice) |
 | Cutout Box Size | $128 \times 128$ pixels |
 | Spatial Dropout Probability | $p = 0.5$ |
-| Feature Flip Probability | $p = 0.5$ |
-| Feature CutMix Probability | $p = 0.5$ |
+| Feature Flip Probability | $p = 0.5$ (per-sample implementation choice) |
+| Feature CutMix Probability | $p = 0.5$ (per-sample implementation choice) |
 | Pseudo-Label Threshold ($\tau$) | 0.3 |
 | Unsupervised Loss Weight $\alpha$ | 2.0 ($Z_s$) |
 | Unsupervised Loss Weight $\beta$ | 2.0 ($Z_{w\_p}$) |
@@ -208,7 +212,14 @@ The 3D-ResNet-18 backbone adopts inflated spatio-temporal convolutions matching 
 | Unlabeled Factor ($\mu$) | 4 ($B_u = 32$, or 16 for $F^2$-FixMatch) |
 | Total Effective Step Size | 40 videos per mini-batch |
 | Validation Protocol | Single center crop (training evaluation) |
-| Test Protocol | 30 views (10 clips $\times$ 3 spatial crops) |
+| Test Protocol | 30 views (10 clips $\times$ 3 spatial crops at $256 \times 256$) |
+
+### 5.1 Gradient Accumulation & Batch Normalization Dynamics
+
+On hardware with single-GPU memory constraints (such as a 24GB NVIDIA RTX A5000), allocating a full mini-batch of $B_l=8, B_u=32$ for 3D video tensors exceeding 64 consecutive frames results in out-of-memory errors during joint forward-backward execution. To maintain the paper's effective batch size of 40 videos ($8 \text{ labeled} + 32 \text{ unlabeled}$), training employs gradient accumulation across 2 micro-steps ($B_l=4, B_u=16$).
+
+> [!WARNING] Gradient Accumulation Approximation & BatchNorm Nuance
+> Gradient accumulation linearly sums loss gradients across mini-steps, but it computes Batch Normalization (BN) layer activations and running statistics ($\mu_B, \sigma_B^2$) over the active micro-batch ($B=20$ videos for $F^2$-FixMatch) rather than the complete batch of 40 videos. Consequently, **gradient accumulation is an approximation that does not preserve BatchNorm behavior exactly** compared to a synchronous multi-GPU configuration executing true physical 40-video batches. This tradeoff is necessitated by single-device VRAM limits.
 
 ---
 
@@ -221,6 +232,17 @@ In video action recognition, training-time validation on a single center crop ty
    $$\bar{P}(y \mid X) = \frac{1}{30} \sum_{v=1}^{30} \text{Softmax}\left( F\left(x^{(v)}\right) \right)$$
    $$\hat{y} = \arg\max \bar{P}(y \mid X)$$
 Only RGB frames are evaluated at test time, requiring zero optical flow or temporal gradient computation during inference.
+
+### 6.1 Checkpoint Evaluation Protocol & Bias Disclosure
+
+The standard UCF-101 Split 1 distribution provides only two official subsets: a training split (9,537 videos) and a test split (3,783 videos), without an independent third validation set. Consequently, standard training pipelines evaluate periodic validation metrics directly on the 3,783 test videos.
+
+When checkpoints are selected by identifying the highest validation score (`best_model.pth`), this introduces *peak-score selection bias* (cherry-picking the highest point on the test evaluation trajectory across epochs). To provide a more disciplined benchmark, training runners save both:
+1. `best_model.pth`: The checkpoint achieving maximum validation accuracy during periodic evaluation.
+2. `final_model.pth`: The model checkpoint at the final scheduled training epoch (epoch 120 for supervised, epoch 220 for FixMatch/$F^2$).
+
+> [!NOTE] Evaluation Bias Caveat
+> While evaluating `final_model.pth` avoids cherry-picking the peak test-epoch score, it **does not completely eliminate evaluation bias**. The test split is still monitored during training, schedule lengths (120/220 epochs) and learning rate decay were tuned with reference to benchmark standards on this split, and the absence of a truly held-out validation set inherently couples training monitoring to the test distribution. Both checkpoints are logged and evaluated for full transparency.
 
 ---
 
@@ -249,13 +271,13 @@ Only RGB frames are evaluated at test time, requiring zero optical flow or tempo
 | **RGB / TG Modality Sync** | Spatial crop coordinates and flips were sampled independently in `dataset.py`. | **Resolved**: `sample_crop_parameters` samples bounding boxes and flip states once; `apply_crop_parameters`, `apply_preset_ops`, and cutout patch reuse synchronize RGB and TG modalities 100%. |
 | **P-Aug Feature Gradient Flow** | `torch.no_grad()` on $Z_w$ feature extraction blocked backpropagation from $\mathcal{L}_u^{w\_p}$ into the backbone. | **Resolved**: $Z_w$ computed with gradients enabled; only pseudo-label assignment is detached. Gradients verified flowing directly to backbone `conv1` (`grad.sum() > 0`). |
 | **FixMatch Joint Forward / BatchNorm** | Labeled, weak, and strong batches were forwarded separately, drifting BatchNorm statistics. | **Resolved**: Joint concatenation `[labeled, weak, strong]` in single forward pass; verified unified BatchNorm tracking. |
-| **RandAugment Signs** | Deterministic parameter sign directions for rotation, shear, and translation. | **Resolved**: Uniform random $\pm$ sign sampling implemented across all 13 transformation operations in `augmentations.py` and `mmaction/datasets/pipelines/augmentations.py`. |
-| **Supervised Loss Scaling** | $\mathcal{L}_s$ was computed as `0.5 * (loss_s_rgb + loss_s_tg)`, halving supervised gradients relative to unsupervised losses. | **Resolved**: Aligned to Equation 13 ($\mathcal{L}_s = \mathcal{L}_s^V + \mathcal{L}_s^G$), restoring exact paper loss balance without the 0.5 attenuation factor. |
+| **RandAugment Directional Signs** | Transformation directions (rotation angles, translation shifts) were deterministic in earlier scripts. | **Implementation Choice (Pending Verification)**: Adopted uniform random $\pm$ sign sampling across signed operations to avoid directional bias. Since Tu et al. does not detail directional sign sampling in the text, this remains an implementation choice pending source verification. |
+| **Supervised Loss Scaling** | $\mathcal{L}_s$ was computed as `0.5 * (loss_s_rgb + loss_s_tg)`, halving supervised gradients relative to unsupervised losses. | **Confirmed Paper Correction**: Aligned to Equation 13 ($\mathcal{L}_s = \mathcal{L}_s^V + \mathcal{L}_s^G$), removing the erroneous 0.5 factor to strictly restore the paper's loss balance between supervised and unsupervised objectives ($\alpha=2, \beta=2, \gamma=1$). |
 | **Evaluation Mode Integrity** | `--eval-mode single` called `three_crop()` returning 3 spatial views instead of 1 center view. | **Resolved**: Added dedicated `center_crop()` in `evaluate.py`; `--eval-mode single` evaluates strictly 1 view, `--eval-mode full` evaluates 30 views. |
-| **Test Crop Resolution** | Test pipelines defaulted to $224 \times 224$ crops instead of $256 \times 256$ specified in Section 4.2. | **Resolved**: Aligned `ThreeCrop` crop size and `evaluate.py` `--crop-size` default to $256 \times 256$ across all configuration files and test runners. |
-| **Per-Sample P-Aug Independence** | Feature horizontal flip and CutMix were sampled across the entire batch at once. | **Resolved**: Made feature flip and CutMix independent Bernoulli trials per video sample in the mini-batch using `torch.rand(b) < p`. |
-| **Checkpoint Selection Bias** | Using the 3,783 validation/test videos for peak epoch selection introduces selection bias. | **Resolved**: All training runners now explicitly save both `final_model.pth` (zero-selection-bias converged model at final epoch) and `best_model.pth` (peak in-training validation model), allowing both protocols to be evaluated and compared transparently. |
+| **Test Crop Resolution** | Test pipelines defaulted to $224 \times 224$ crops instead of $256 \times 256$ specified in Section 4.2. | **Confirmed Paper Correction**: Corrected `ThreeCrop` crop size and `evaluate.py` `--crop-size` default to $256 \times 256$ across all configuration files and test runners, matching Section 4.2 of Tu et al. |
+| **P-Aug Sampling Granularity** | Feature horizontal flip and CutMix were previously sampled batch-wide (all samples transformed identically). | **Implementation Choice**: Implemented independent per-sample Bernoulli trials (`torch.rand(b) < p`) to increase intra-batch feature diversity. The paper does not specify the sampling granularity of feature-level perturbations; this is an engineering implementation choice rather than a confirmed paper correction. |
+| **Checkpoint Selection Protocol** | Selecting checkpoints using peak validation accuracy on the 3,783 test videos introduces peak-score selection bias on the benchmark split. | **Mitigation & Disclosure**: Training runners save both `final_model.pth` (final scheduled epoch) and `best_model.pth` (peak validation accuracy). Evaluating `final_model.pth` avoids cherry-picking the peak test-epoch score, but does not completely eliminate evaluation bias, as UCF-101 Split 1 lacks an independent third validation split and the test set is monitored during training. Both checkpoints are preserved for transparent reporting. |
 | **Spatial Dropout Probability** | Set to `0.2` in `FeaturePerturbator`. | **Resolved**: Updated default to $p = 0.5$ matching Section 3.2. |
-| **Gradient Accumulation** | Potential under-scaling on terminal leftover batches. | **Resolved**: Dynamically scales by `min(accum_steps, len(loader) - current_window_start)`. |
+| **Gradient Accumulation & BatchNorm** | Effective batch size 40 simulated via accumulation steps = 2 ($B_l=4, B_u=16$). Leftover batches dynamically scaled. | **Approximation Documented**: Gradient accumulation accumulates loss gradients across micro-batches, but computes Batch Normalization running statistics and layer activations over the micro-batch size ($B=20$) rather than the full batch of 40. This is an engineering approximation necessitated by single-GPU VRAM limits that does not preserve BatchNorm dynamics exactly compared to physical multi-GPU execution. |
 | **Dataset Failures** | Silent fallback to black dummy frames masked corrupted data or bad paths. | **Resolved**: Replaced with explicit `RuntimeError` tracking for fail-fast data integrity. |
 | **MMAction2 Modular Refactoring** | Standalone custom scripts lacked modular config-driven architecture. | **Resolved**: Refactored into full pure-PyTorch MMAction2 package (`mmaction/`), standard config files (`configs/`), and unified tools (`tools/train.py`, `tools/test.py`). |
