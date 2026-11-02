@@ -18,6 +18,7 @@ from mmaction.utils.config import Config
 from mmaction.models.builder import build_recognizer
 from mmaction.datasets.builder import build_dataset, build_dataloader
 from mmaction.core.evaluation import top_k_accuracy
+from mmaction.core.random_seed import set_random_seed
 
 
 def parse_args():
@@ -25,6 +26,8 @@ def parse_args():
     parser.add_argument("config", help="Path to MMAction2 config file")
     parser.add_argument("--work-dir", help="Directory to save logs and checkpoints")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser.add_argument("--deterministic", action="store_true", help="Enable deterministic CUDNN")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     return parser.parse_args()
 
@@ -61,6 +64,7 @@ def evaluate(model, val_loader, device):
 
 def main():
     args = parse_args()
+    set_random_seed(args.seed, args.deterministic)
     cfg = Config.fromfile(args.config)
 
     work_dir = args.work_dir if args.work_dir else cfg.get('work_dir', 'checkpoints/exp')

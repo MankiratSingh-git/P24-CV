@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 
 from models.resnet3d import F2FixMatchModel
 from dataset import UCF101Dataset
+from mmaction.core.random_seed import set_random_seed
 
 
 def parse_args():
@@ -36,6 +37,7 @@ def parse_args():
     parser.add_argument("--accum-steps", type=int, default=2, help="Gradient accumulation steps to imitate 2-GPU mini-batch (Section 4.2)")
 
     # System settings
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--num-workers", type=int, default=4, help="Dataloader workers")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--output-dir", type=str, default="checkpoints/f2_fixmatch")
@@ -87,6 +89,7 @@ def evaluate(model, val_loader, device):
 
 def main():
     args = parse_args()
+    set_random_seed(args.seed)
     os.makedirs(args.output_dir, exist_ok=True)
     device = torch.device(args.device)
 
