@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument("--split", type=int, default=1, choices=[1, 2, 3], help="Official UCF-101 split")
 
     parser.add_argument("--epochs", type=int, default=120, help="Total training epochs for supervised only")
-    parser.add_argument("--batch-size", type=int, default=8, help="Batch size B_l")
+    parser.add_argument("--batch-size", "--batch-size-labeled", type=int, default=8, dest="batch_size", help="Batch size B_l")
     parser.add_argument("--lr", type=float, default=0.2, help="Initial learning rate")
     parser.add_argument("--momentum", type=float, default=0.9, help="SGD momentum")
     parser.add_argument("--weight-decay", type=float, default=1e-4, help="SGD weight decay")

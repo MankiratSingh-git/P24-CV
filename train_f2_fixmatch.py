@@ -23,7 +23,8 @@ def parse_args():
     # Hyperparameters from Section 4.2 & 4.5
     parser.add_argument("--epochs", type=int, default=220, help="Total training epochs (220 for 10% subset)")
     parser.add_argument("--warmup-epochs", type=int, default=40, help="Warmup epochs with only labeled data")
-    parser.add_argument("--batch-size", type=int, default=4, help="Labeled batch size B_l per GPU")
+    parser.add_argument("--batch-size", "--batch-size-labeled", type=int, default=4, dest="batch_size", help="Labeled batch size B_l per GPU")
+    parser.add_argument("--batch-size-unlabeled", type=int, default=None, help="Explicit unlabeled batch size B_u (overrides --mu if set)")
     parser.add_argument("--mu", type=int, default=4, help="Unlabeled batch size factor: B_u = mu * B_l")
     parser.add_argument("--lr", type=float, default=0.2, help="Initial learning rate")
     parser.add_argument("--momentum", type=float, default=0.9, help="SGD momentum")
@@ -97,7 +98,8 @@ def main():
     print("F2-FixMatch: Frame- and Feature-level Progressive Augmentation")
     print(f"Backbone: 3D-ResNet-18 | Device: {device}")
     print(f"Dataset: UCF-101 ({args.labeled_percent}% labeled) | Split: {args.split}")
-    print(f"Batch Size: B_l={args.batch_size}, B_u={args.batch_size * args.mu}")
+    unlabeled_bs = args.batch_size_unlabeled if args.batch_size_unlabeled is not None else args.batch_size * args.mu
+    print(f"Batch Size: B_l={args.batch_size}, B_u={unlabeled_bs}")
     print(f"Loss Weights: alpha={args.alpha}, beta={args.beta}, gamma={args.gamma} | Tau: {args.threshold}")
     print("=" * 65)
 
@@ -137,7 +139,7 @@ def main():
         num_workers=args.num_workers, drop_last=True, pin_memory=(device.type == 'cuda')
     )
     unlabeled_loader = DataLoader(
-        unlabeled_dataset, batch_size=args.batch_size * args.mu, shuffle=True,
+        unlabeled_dataset, batch_size=unlabeled_bs, shuffle=True,
         num_workers=args.num_workers, drop_last=True, pin_memory=(device.type == 'cuda')
     )
     val_loader = DataLoader(
