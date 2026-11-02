@@ -56,7 +56,7 @@ val_pipeline = [
 test_pipeline = [
     dict(type='SampleFrames', clip_len=8, frame_interval=8, num_clips=10, test_mode=True),
     dict(type='RawFrameDecode'),
-    dict(type='ThreeCrop', crop_size=224, scale=256),
+    dict(type='ThreeCrop', crop_size=256, scale=256),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCTHW'),
     dict(type='ToTensor', keys=['imgs', 'label']),

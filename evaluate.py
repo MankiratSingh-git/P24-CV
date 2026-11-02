@@ -178,7 +178,7 @@ def main():
     parser.add_argument("--model-type", type=str, default="auto", choices=["auto", "resnet", "f2"], help="Model architecture")
     parser.add_argument("--eval-mode", type=str, default="full", choices=["single", "full"],
                         help="'single' = 1-clip center-crop, 'full' = 10-clip x 3-crop (30 views, official paper protocol)")
-    parser.add_argument("--crop-size", type=int, default=224, help="Spatial crop resolution (224 matches 3D-ResNet-18 input; 256 supported)")
+    parser.add_argument("--crop-size", type=int, default=256, help="Spatial crop resolution (256x256 as specified in Section 4.2 of paper)")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
