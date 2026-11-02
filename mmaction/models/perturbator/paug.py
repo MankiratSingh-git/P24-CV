@@ -58,3 +58,8 @@ class FeaturePerturbator(nn.Module):
         feat_2d = self.apply_feature_flipping(feat_2d)
         feat_2d = self.apply_noise_injection(feat_2d)
         return feat_2d
+
+
+# Register alias P_Aug
+P_Aug = FeaturePerturbator
+PERTURBATORS.register_module(name='P_Aug', module=P_Aug)
