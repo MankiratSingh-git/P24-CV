@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from models.resnet3d import ResNet3D18
 from dataset import UCF101Dataset
-from mmaction.core.random_seed import set_random_seed
+from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states
 
 
 def parse_args():
@@ -163,6 +163,9 @@ def main():
             model.load_state_dict(checkpoint['model_state_dict'])
             if 'optimizer_state_dict' in checkpoint:
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            if 'rng_state' in checkpoint:
+                set_rng_states(checkpoint['rng_state'])
+                print("=> Restored full RNG state (Python, NumPy, PyTorch CPU/CUDA)")
             start_epoch = checkpoint.get('epoch', 0)
             best_val_top1 = checkpoint.get('best_val_top1', checkpoint.get('val_top1', 0.0))
             print(f"=> Resumed from Epoch {start_epoch} (Best Val Top-1: {best_val_top1:.2f}%)")
@@ -275,6 +278,7 @@ def main():
                     'best_val_top1': best_val_top1,
                     'val_top1': val_top1,
                     'val_top5': val_top5,
+                    'rng_state': get_rng_states(),
                 }, os.path.join(args.output_dir, "best_model.pth"))
 
             print(
@@ -289,6 +293,7 @@ def main():
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'best_val_top1': best_val_top1,
+            'rng_state': get_rng_states(),
         }, os.path.join(args.output_dir, "latest_checkpoint.pth"))
 
     elapsed = time.time() - start_time

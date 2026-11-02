@@ -15,22 +15,18 @@ def _load_frame(video_path, frame_idx, filename_tmpl='img_{:05d}.jpg'):
     if os.path.isdir(video_path):
         filename = os.path.join(video_path, filename_tmpl.format(frame_idx))
         if not os.path.exists(filename):
-            # Fallback to 1-based or 0-based alternative
+            # Check 1-based alternative (e.g. index 0 -> img_00001.jpg)
             alt1 = os.path.join(video_path, filename_tmpl.format(frame_idx + 1))
             if os.path.exists(alt1):
                 filename = alt1
             else:
-                all_imgs = sorted(glob.glob(os.path.join(video_path, '*.jpg')) or
-                                  glob.glob(os.path.join(video_path, '*.png')))
-                if len(all_imgs) > 0:
-                    clamped = min(max(0, frame_idx), len(all_imgs) - 1)
-                    filename = all_imgs[clamped]
-                else:
-                    raise IOError(f"No image frames found in directory: {video_path}")
+                raise IOError(
+                    f"Frame index {frame_idx} (tried '{filename}' and '{alt1}') not found in directory: '{video_path}'"
+                )
 
         img = cv2.imread(filename)
         if img is None:
-            raise IOError(f"Failed to read image: {filename}")
+            raise IOError(f"Failed to read image file: '{filename}'")
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         return Image.fromarray(img)
     else:

@@ -32,23 +32,30 @@ class FeaturePerturbator(nn.Module):
         return feat_2d
 
     def apply_feature_flipping(self, feat_2d):
-        if random.random() < self.flip_prob and self.training:
-            return torch.flip(feat_2d, dims=[-1])
+        """Applies independent horizontal feature flipping per sample with flip_prob."""
+        if self.flip_prob > 0 and self.training:
+            b = feat_2d.size(0)
+            flip_mask = torch.rand(b, device=feat_2d.device) < self.flip_prob
+            if flip_mask.any():
+                flipped = torch.flip(feat_2d, dims=[-1])
+                feat_2d = torch.where(flip_mask.view(b, 1, 1, 1), flipped, feat_2d)
         return feat_2d
 
     def apply_noise_injection(self, feat_2d):
-        if (self.noise_injection_prob > 0 and feat_2d.size(0) > 1 and
-                self.training and random.random() < self.noise_injection_prob):
+        """Feature CutMix: injects a spatial patch from a randomly permuted sample per-sample."""
+        if self.noise_injection_prob > 0 and feat_2d.size(0) > 1 and self.training:
             b, c, h, w = feat_2d.size()
-            rand_indices = torch.randperm(b, device=feat_2d.device)
-            patch_h = max(1, random.randint(1, max(1, h // 2)))
-            patch_w = max(1, random.randint(1, max(1, w // 2)))
-            top = random.randint(0, h - patch_h)
-            left = random.randint(0, w - patch_w)
+            inject_mask = torch.rand(b, device=feat_2d.device) < self.noise_injection_prob
+            if inject_mask.any():
+                rand_indices = torch.randperm(b, device=feat_2d.device)
+                patch_h = max(1, random.randint(1, max(1, h // 2)))
+                patch_w = max(1, random.randint(1, max(1, w // 2)))
+                top = random.randint(0, h - patch_h)
+                left = random.randint(0, w - patch_w)
 
-            perturbed = feat_2d.clone()
-            perturbed[:, :, top:top+patch_h, left:left+patch_w] = feat_2d[rand_indices, :, top:top+patch_h, left:left+patch_w]
-            return perturbed
+                perturbed = feat_2d.clone()
+                perturbed[:, :, top:top+patch_h, left:left+patch_w] = feat_2d[rand_indices, :, top:top+patch_h, left:left+patch_w]
+                feat_2d = torch.where(inject_mask.view(b, 1, 1, 1), perturbed, feat_2d)
         return feat_2d
 
     def forward(self, feat_3d):

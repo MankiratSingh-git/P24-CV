@@ -56,19 +56,50 @@ def three_crop(pil_frames, crop_size=224, scale=256):
     return crop_tensors
 
 
+def center_crop(pil_frames, crop_size=224, scale=256):
+    """
+    Takes 1 spatial center crop of size crop_size x crop_size
+    after scaling shorter side to scale (default 256 pixels).
+    """
+    orig_w, orig_h = pil_frames[0].size
+    if orig_h < orig_w:
+        new_h = scale
+        new_w = int(round(orig_w * (scale / float(orig_h))))
+    else:
+        new_w = scale
+        new_h = int(round(orig_h * (scale / float(orig_w))))
+
+    new_w = max(new_w, crop_size)
+    new_h = max(new_h, crop_size)
+
+    x0 = (new_w - crop_size) // 2
+    y0 = (new_h - crop_size) // 2
+
+    frames_arr = []
+    for frame in pil_frames:
+        resized = frame.resize((new_w, new_h), Image.BILINEAR)
+        cropped = resized.crop((x0, y0, x0 + crop_size, y0 + crop_size))
+        frames_arr.append(np.array(cropped))
+    arr = np.stack(frames_arr, axis=0).astype(np.float32)
+    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
+    tensor = torch.from_numpy(arr).permute(3, 0, 1, 2)  # (3, T, H, W)
+    return [tensor]
+
+
 class UCF101FullTestDataset(Dataset):
     """
-    Dataset for full paper test evaluation:
-    Uniformly samples 10 video clips over the whole video, 3 crops per clip (30 views per video).
-    Crop size defaults to 256x256 as specified in Section 4.2 of the paper.
+    Dataset for test evaluation:
+    - If eval_mode == 'single': 1 temporal center clip x 1 spatial center crop (1 view per video).
+    - If eval_mode == 'full': 10 temporal clips x 3 spatial crops (30 views per video, official paper protocol).
     """
-    def __init__(self, data_root, split_file, clip_len=8, frame_interval=8, num_clips=10, crop_size=256):
+    def __init__(self, data_root, split_file, clip_len=8, frame_interval=8, num_clips=10, crop_size=224, eval_mode='full'):
         self.data_root = data_root
         self.split_file = split_file
         self.clip_len = clip_len
         self.frame_interval = frame_interval
-        self.num_clips = num_clips
+        self.num_clips = 1 if eval_mode == 'single' else num_clips
         self.crop_size = crop_size
+        self.eval_mode = eval_mode
         self.samples = []
         self._load_split()
 
@@ -111,6 +142,16 @@ class UCF101FullTestDataset(Dataset):
         label = sample['label']
 
         span = self.clip_len * self.frame_interval
+        if self.eval_mode == 'single':
+            # Single view: 1 temporal center clip x 1 spatial center crop (exact training validation standard)
+            start = max(0, (total_frames - span) // 2) if total_frames > span else 0
+            frame_indices = [int((start + i * self.frame_interval) % max(1, total_frames)) for i in range(self.clip_len)]
+            frames = load_video_frames(video_path, frame_indices)
+            crops = center_crop(frames, crop_size=self.crop_size, scale=256)
+            tensors = torch.stack(crops, dim=0)  # (1, 3, 8, crop_size, crop_size)
+            return tensors, label
+
+        # Full view: 10 temporal clips x 3 spatial crops = 30 views (official paper protocol)
         if total_frames > span:
             intervals = np.linspace(0, total_frames - span, self.num_clips, dtype=int)
         else:
@@ -168,7 +209,8 @@ def main():
         data_root=args.data_root, 
         split_file=val_split, 
         num_clips=(10 if args.eval_mode == 'full' else 1),
-        crop_size=args.crop_size
+        crop_size=args.crop_size,
+        eval_mode=args.eval_mode
     )
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=2)
 

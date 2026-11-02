@@ -68,8 +68,8 @@ test_pipeline = [
 ]
 
 data = dict(
-    videos_per_gpu=8,
-    unlabeled_ratio=4,  # B_u = 32
+    videos_per_gpu=4,
+    unlabeled_ratio=4,  # B_u = 16, with accum_steps=2 yields effective Bl=8, Bu=32
     workers_per_gpu=4,
     train_labeled=dict(
         type='RawframeDataset',
@@ -103,5 +103,6 @@ data = dict(
 optimizer = dict(type='SGD', lr=0.2, momentum=0.9, weight_decay=1e-4)
 total_epochs = 220
 warmup_epochs = 40
+accum_steps = 2
 eval_freq = 5
 work_dir = 'checkpoints/fixmatch_baseline'

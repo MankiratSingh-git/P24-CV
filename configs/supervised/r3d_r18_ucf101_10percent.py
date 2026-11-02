@@ -92,5 +92,6 @@ data = dict(
 optimizer = dict(type='SGD', lr=0.2, momentum=0.9, weight_decay=1e-4)
 total_epochs = 120
 warmup_epochs = 10
+accum_steps = 2
 eval_freq = 5
 work_dir = 'checkpoints/supervised_baseline'

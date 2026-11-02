@@ -18,7 +18,7 @@ from mmaction.utils.config import Config
 from mmaction.models.builder import build_recognizer
 from mmaction.datasets.builder import build_dataset, build_dataloader
 from mmaction.core.evaluation import top_k_accuracy
-from mmaction.core.random_seed import set_random_seed
+from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states
 
 
 def parse_args():
@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument("config", help="Path to MMAction2 config file")
     parser.add_argument("--work-dir", help="Directory to save logs and checkpoints")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from")
+    parser.add_argument("--accum-steps", type=int, default=None, help="Gradient accumulation steps override")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--deterministic", action="store_true", help="Enable deterministic CUDNN")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -141,13 +142,16 @@ def main():
         model.load_state_dict(ckpt['model_state_dict'])
         if 'optimizer_state_dict' in ckpt:
             optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+        if 'rng_state' in ckpt:
+            set_rng_states(ckpt['rng_state'])
+            print("=> Restored full RNG states (Python, NumPy, PyTorch CPU/CUDA)")
         start_epoch = ckpt.get('epoch', 0)
         best_val_top1 = ckpt.get('best_val_top1', ckpt.get('val_top1', 0.0))
         print(f"=> Resumed at Epoch {start_epoch} with Best Top-1: {best_val_top1:.2f}%")
 
     total_epochs = cfg.get('total_epochs', 220)
     warmup_epochs = cfg.get('warmup_epochs', 40)
-    accum_steps = cfg.get('accum_steps', 1)
+    accum_steps = args.accum_steps if args.accum_steps is not None else cfg.get('accum_steps', 2)
     eval_freq = cfg.get('eval_freq', 5)
 
     print(f"Starting Training: Epochs={total_epochs} (Warmup={warmup_epochs}) | Accum Steps={accum_steps}")
@@ -264,6 +268,7 @@ def main():
                     'best_val_top1': best_val_top1,
                     'val_top1': val_top1,
                     'val_top5': val_top5,
+                    'rng_state': get_rng_states(),
                 }, os.path.join(work_dir, "best_model.pth"))
 
             print(
@@ -278,6 +283,7 @@ def main():
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'best_val_top1': best_val_top1,
+            'rng_state': get_rng_states(),
         }, os.path.join(work_dir, "latest_checkpoint.pth"))
 
     elapsed = time.time() - start_time
