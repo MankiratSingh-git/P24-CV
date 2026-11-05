@@ -1,0 +1,6 @@
+{
+  "checkpoint": "C:\\Code\\P24-CV\\checkpoints\\fixmatch_baseline\\best_model.pth",
+  "best_epoch": 215,
+  "val_top1": 35.82,
+  "val_top5": 64.18
+}

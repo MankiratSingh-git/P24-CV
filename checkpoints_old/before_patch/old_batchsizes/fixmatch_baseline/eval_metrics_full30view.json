@@ -1,0 +1,682 @@
+{
+  "checkpoint": "C:\\Code\\P24-CV\\checkpoints\\fixmatch_baseline\\best_model.pth",
+  "split": 1,
+  "eval_mode": "full",
+  "num_eval_videos": 3783,
+  "model_params_M": 31.87,
+  "top1_accuracy": 36.03,
+  "top5_accuracy": 64.68,
+  "best_5_classes": [
+    {
+      "class_id": 84,
+      "class_name": "SoccerPenalty",
+      "accuracy": 100.0,
+      "total": 41
+    },
+    {
+      "class_id": 63,
+      "class_name": "PlayingPiano",
+      "accuracy": 100.0,
+      "total": 28
+    },
+    {
+      "class_id": 8,
+      "class_name": "BasketballDunk",
+      "accuracy": 97.3,
+      "total": 37
+    },
+    {
+      "class_id": 43,
+      "class_name": "IceDancing",
+      "accuracy": 95.65,
+      "total": 46
+    },
+    {
+      "class_id": 15,
+      "class_name": "Bowling",
+      "accuracy": 95.35,
+      "total": 43
+    }
+  ],
+  "worst_5_classes": [
+    {
+      "class_id": 10,
+      "class_name": "Biking",
+      "accuracy": 0.0,
+      "total": 38
+    },
+    {
+      "class_id": 17,
+      "class_name": "BoxingSpeedBag",
+      "accuracy": 0.0,
+      "total": 37
+    },
+    {
+      "class_id": 19,
+      "class_name": "BrushingTeeth",
+      "accuracy": 0.0,
+      "total": 36
+    },
+    {
+      "class_id": 20,
+      "class_name": "CleanAndJerk",
+      "accuracy": 0.0,
+      "total": 33
+    },
+    {
+      "class_id": 34,
+      "class_name": "Hammering",
+      "accuracy": 0.0,
+      "total": 33
+    }
+  ],
+  "per_class_accuracy": [
+    {
+      "class_id": 0,
+      "class_name": "ApplyEyeMakeup",
+      "accuracy": 72.73,
+      "total": 44
+    },
+    {
+      "class_id": 1,
+      "class_name": "ApplyLipstick",
+      "accuracy": 9.38,
+      "total": 32
+    },
+    {
+      "class_id": 2,
+      "class_name": "Archery",
+      "accuracy": 14.63,
+      "total": 41
+    },
+    {
+      "class_id": 3,
+      "class_name": "BabyCrawling",
+      "accuracy": 22.86,
+      "total": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "BalanceBeam",
+      "accuracy": 45.16,
+      "total": 31
+    },
+    {
+      "class_id": 5,
+      "class_name": "BandMarching",
+      "accuracy": 51.16,
+      "total": 43
+    },
+    {
+      "class_id": 6,
+      "class_name": "BaseballPitch",
+      "accuracy": 46.51,
+      "total": 43
+    },
+    {
+      "class_id": 7,
+      "class_name": "Basketball",
+      "accuracy": 5.71,
+      "total": 35
+    },
+    {
+      "class_id": 8,
+      "class_name": "BasketballDunk",
+      "accuracy": 97.3,
+      "total": 37
+    },
+    {
+      "class_id": 9,
+      "class_name": "BenchPress",
+      "accuracy": 87.5,
+      "total": 48
+    },
+    {
+      "class_id": 10,
+      "class_name": "Biking",
+      "accuracy": 0.0,
+      "total": 38
+    },
+    {
+      "class_id": 11,
+      "class_name": "Billiards",
+      "accuracy": 92.5,
+      "total": 40
+    },
+    {
+      "class_id": 12,
+      "class_name": "BlowDryHair",
+      "accuracy": 34.21,
+      "total": 38
+    },
+    {
+      "class_id": 13,
+      "class_name": "BlowingCandles",
+      "accuracy": 9.09,
+      "total": 33
+    },
+    {
+      "class_id": 14,
+      "class_name": "BodyWeightSquats",
+      "accuracy": 36.67,
+      "total": 30
+    },
+    {
+      "class_id": 15,
+      "class_name": "Bowling",
+      "accuracy": 95.35,
+      "total": 43
+    },
+    {
+      "class_id": 16,
+      "class_name": "BoxingPunchingBag",
+      "accuracy": 67.35,
+      "total": 49
+    },
+    {
+      "class_id": 17,
+      "class_name": "BoxingSpeedBag",
+      "accuracy": 0.0,
+      "total": 37
+    },
+    {
+      "class_id": 18,
+      "class_name": "BreastStroke",
+      "accuracy": 89.29,
+      "total": 28
+    },
+    {
+      "class_id": 19,
+      "class_name": "BrushingTeeth",
+      "accuracy": 0.0,
+      "total": 36
+    },
+    {
+      "class_id": 20,
+      "class_name": "CleanAndJerk",
+      "accuracy": 0.0,
+      "total": 33
+    },
+    {
+      "class_id": 21,
+      "class_name": "CliffDiving",
+      "accuracy": 30.77,
+      "total": 39
+    },
+    {
+      "class_id": 22,
+      "class_name": "CricketBowling",
+      "accuracy": 33.33,
+      "total": 36
+    },
+    {
+      "class_id": 23,
+      "class_name": "CricketShot",
+      "accuracy": 26.53,
+      "total": 49
+    },
+    {
+      "class_id": 24,
+      "class_name": "CuttingInKitchen",
+      "accuracy": 9.09,
+      "total": 33
+    },
+    {
+      "class_id": 25,
+      "class_name": "Diving",
+      "accuracy": 80.0,
+      "total": 45
+    },
+    {
+      "class_id": 26,
+      "class_name": "Drumming",
+      "accuracy": 15.56,
+      "total": 45
+    },
+    {
+      "class_id": 27,
+      "class_name": "Fencing",
+      "accuracy": 32.35,
+      "total": 34
+    },
+    {
+      "class_id": 28,
+      "class_name": "FieldHockeyPenalty",
+      "accuracy": 32.5,
+      "total": 40
+    },
+    {
+      "class_id": 29,
+      "class_name": "FloorGymnastics",
+      "accuracy": 69.44,
+      "total": 36
+    },
+    {
+      "class_id": 30,
+      "class_name": "FrisbeeCatch",
+      "accuracy": 64.86,
+      "total": 37
+    },
+    {
+      "class_id": 31,
+      "class_name": "FrontCrawl",
+      "accuracy": 10.81,
+      "total": 37
+    },
+    {
+      "class_id": 32,
+      "class_name": "GolfSwing",
+      "accuracy": 51.28,
+      "total": 39
+    },
+    {
+      "class_id": 33,
+      "class_name": "Haircut",
+      "accuracy": 6.06,
+      "total": 33
+    },
+    {
+      "class_id": 34,
+      "class_name": "Hammering",
+      "accuracy": 0.0,
+      "total": 33
+    },
+    {
+      "class_id": 35,
+      "class_name": "HammerThrow",
+      "accuracy": 40.0,
+      "total": 45
+    },
+    {
+      "class_id": 36,
+      "class_name": "HandstandPushups",
+      "accuracy": 50.0,
+      "total": 28
+    },
+    {
+      "class_id": 37,
+      "class_name": "HandstandWalking",
+      "accuracy": 2.94,
+      "total": 34
+    },
+    {
+      "class_id": 38,
+      "class_name": "HeadMassage",
+      "accuracy": 29.27,
+      "total": 41
+    },
+    {
+      "class_id": 39,
+      "class_name": "HighJump",
+      "accuracy": 21.62,
+      "total": 37
+    },
+    {
+      "class_id": 40,
+      "class_name": "HorseRace",
+      "accuracy": 54.29,
+      "total": 35
+    },
+    {
+      "class_id": 41,
+      "class_name": "HorseRiding",
+      "accuracy": 63.27,
+      "total": 49
+    },
+    {
+      "class_id": 42,
+      "class_name": "HulaHoop",
+      "accuracy": 29.41,
+      "total": 34
+    },
+    {
+      "class_id": 43,
+      "class_name": "IceDancing",
+      "accuracy": 95.65,
+      "total": 46
+    },
+    {
+      "class_id": 44,
+      "class_name": "JavelinThrow",
+      "accuracy": 38.71,
+      "total": 31
+    },
+    {
+      "class_id": 45,
+      "class_name": "JugglingBalls",
+      "accuracy": 0.0,
+      "total": 40
+    },
+    {
+      "class_id": 46,
+      "class_name": "JumpingJack",
+      "accuracy": 29.73,
+      "total": 37
+    },
+    {
+      "class_id": 47,
+      "class_name": "JumpRope",
+      "accuracy": 34.21,
+      "total": 38
+    },
+    {
+      "class_id": 48,
+      "class_name": "Kayaking",
+      "accuracy": 0.0,
+      "total": 36
+    },
+    {
+      "class_id": 49,
+      "class_name": "Knitting",
+      "accuracy": 50.0,
+      "total": 34
+    },
+    {
+      "class_id": 50,
+      "class_name": "LongJump",
+      "accuracy": 28.21,
+      "total": 39
+    },
+    {
+      "class_id": 51,
+      "class_name": "Lunges",
+      "accuracy": 5.41,
+      "total": 37
+    },
+    {
+      "class_id": 52,
+      "class_name": "MilitaryParade",
+      "accuracy": 45.45,
+      "total": 33
+    },
+    {
+      "class_id": 53,
+      "class_name": "Mixing",
+      "accuracy": 60.0,
+      "total": 45
+    },
+    {
+      "class_id": 54,
+      "class_name": "MoppingFloor",
+      "accuracy": 11.76,
+      "total": 34
+    },
+    {
+      "class_id": 55,
+      "class_name": "Nunchucks",
+      "accuracy": 14.29,
+      "total": 35
+    },
+    {
+      "class_id": 56,
+      "class_name": "ParallelBars",
+      "accuracy": 40.54,
+      "total": 37
+    },
+    {
+      "class_id": 57,
+      "class_name": "PizzaTossing",
+      "accuracy": 3.03,
+      "total": 33
+    },
+    {
+      "class_id": 58,
+      "class_name": "PlayingCello",
+      "accuracy": 0.0,
+      "total": 44
+    },
+    {
+      "class_id": 59,
+      "class_name": "PlayingDaf",
+      "accuracy": 0.0,
+      "total": 41
+    },
+    {
+      "class_id": 60,
+      "class_name": "PlayingDhol",
+      "accuracy": 0.0,
+      "total": 49
+    },
+    {
+      "class_id": 61,
+      "class_name": "PlayingFlute",
+      "accuracy": 12.5,
+      "total": 48
+    },
+    {
+      "class_id": 62,
+      "class_name": "PlayingGuitar",
+      "accuracy": 58.14,
+      "total": 43
+    },
+    {
+      "class_id": 63,
+      "class_name": "PlayingPiano",
+      "accuracy": 100.0,
+      "total": 28
+    },
+    {
+      "class_id": 64,
+      "class_name": "PlayingSitar",
+      "accuracy": 25.0,
+      "total": 44
+    },
+    {
+      "class_id": 65,
+      "class_name": "PlayingTabla",
+      "accuracy": 22.58,
+      "total": 31
+    },
+    {
+      "class_id": 66,
+      "class_name": "PlayingViolin",
+      "accuracy": 32.14,
+      "total": 28
+    },
+    {
+      "class_id": 67,
+      "class_name": "PoleVault",
+      "accuracy": 30.0,
+      "total": 40
+    },
+    {
+      "class_id": 68,
+      "class_name": "PommelHorse",
+      "accuracy": 40.0,
+      "total": 35
+    },
+    {
+      "class_id": 69,
+      "class_name": "PullUps",
+      "accuracy": 39.29,
+      "total": 28
+    },
+    {
+      "class_id": 70,
+      "class_name": "Punch",
+      "accuracy": 87.18,
+      "total": 39
+    },
+    {
+      "class_id": 71,
+      "class_name": "PushUps",
+      "accuracy": 0.0,
+      "total": 30
+    },
+    {
+      "class_id": 72,
+      "class_name": "Rafting",
+      "accuracy": 35.71,
+      "total": 28
+    },
+    {
+      "class_id": 73,
+      "class_name": "RockClimbingIndoor",
+      "accuracy": 63.41,
+      "total": 41
+    },
+    {
+      "class_id": 74,
+      "class_name": "RopeClimbing",
+      "accuracy": 32.35,
+      "total": 34
+    },
+    {
+      "class_id": 75,
+      "class_name": "Rowing",
+      "accuracy": 52.78,
+      "total": 36
+    },
+    {
+      "class_id": 76,
+      "class_name": "SalsaSpin",
+      "accuracy": 16.28,
+      "total": 43
+    },
+    {
+      "class_id": 77,
+      "class_name": "ShavingBeard",
+      "accuracy": 27.91,
+      "total": 43
+    },
+    {
+      "class_id": 78,
+      "class_name": "Shotput",
+      "accuracy": 0.0,
+      "total": 46
+    },
+    {
+      "class_id": 79,
+      "class_name": "SkateBoarding",
+      "accuracy": 34.38,
+      "total": 32
+    },
+    {
+      "class_id": 80,
+      "class_name": "Skiing",
+      "accuracy": 47.5,
+      "total": 40
+    },
+    {
+      "class_id": 81,
+      "class_name": "Skijet",
+      "accuracy": 64.29,
+      "total": 28
+    },
+    {
+      "class_id": 82,
+      "class_name": "SkyDiving",
+      "accuracy": 9.68,
+      "total": 31
+    },
+    {
+      "class_id": 83,
+      "class_name": "SoccerJuggling",
+      "accuracy": 25.64,
+      "total": 39
+    },
+    {
+      "class_id": 84,
+      "class_name": "SoccerPenalty",
+      "accuracy": 100.0,
+      "total": 41
+    },
+    {
+      "class_id": 85,
+      "class_name": "StillRings",
+      "accuracy": 37.5,
+      "total": 32
+    },
+    {
+      "class_id": 86,
+      "class_name": "SumoWrestling",
+      "accuracy": 76.47,
+      "total": 34
+    },
+    {
+      "class_id": 87,
+      "class_name": "Surfing",
+      "accuracy": 81.82,
+      "total": 33
+    },
+    {
+      "class_id": 88,
+      "class_name": "Swing",
+      "accuracy": 11.9,
+      "total": 42
+    },
+    {
+      "class_id": 89,
+      "class_name": "TableTennisShot",
+      "accuracy": 17.95,
+      "total": 39
+    },
+    {
+      "class_id": 90,
+      "class_name": "TaiChi",
+      "accuracy": 39.29,
+      "total": 28
+    },
+    {
+      "class_id": 91,
+      "class_name": "TennisSwing",
+      "accuracy": 28.57,
+      "total": 49
+    },
+    {
+      "class_id": 92,
+      "class_name": "ThrowDiscus",
+      "accuracy": 10.53,
+      "total": 38
+    },
+    {
+      "class_id": 93,
+      "class_name": "TrampolineJumping",
+      "accuracy": 34.38,
+      "total": 32
+    },
+    {
+      "class_id": 94,
+      "class_name": "Typing",
+      "accuracy": 16.28,
+      "total": 43
+    },
+    {
+      "class_id": 95,
+      "class_name": "UnevenBars",
+      "accuracy": 78.57,
+      "total": 28
+    },
+    {
+      "class_id": 96,
+      "class_name": "VolleyballSpiking",
+      "accuracy": 65.71,
+      "total": 35
+    },
+    {
+      "class_id": 97,
+      "class_name": "WalkingWithDog",
+      "accuracy": 2.78,
+      "total": 36
+    },
+    {
+      "class_id": 98,
+      "class_name": "WallPushups",
+      "accuracy": 74.29,
+      "total": 35
+    },
+    {
+      "class_id": 99,
+      "class_name": "WritingOnBoard",
+      "accuracy": 2.22,
+      "total": 45
+    },
+    {
+      "class_id": 100,
+      "class_name": "YoYo",
+      "accuracy": 5.56,
+      "total": 36
+    }
+  ],
+  "elapsed_seconds": 1738.6
+}

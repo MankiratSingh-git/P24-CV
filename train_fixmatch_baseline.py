@@ -32,8 +32,8 @@ def parse_args():
     parser.add_argument("--momentum", type=float, default=0.9, help="SGD momentum")
     parser.add_argument("--weight-decay", type=float, default=1e-4, help="SGD weight decay")
     parser.add_argument("--threshold", type=float, default=0.3, help="Confidence threshold tau (0.3 in paper)")
-    parser.add_argument("--lambda-u", type=float, default=2.0, help="Unsupervised loss weight (default: 2.0 to match alpha=2.0 in F2-FixMatch)")
-    parser.add_argument("--rampup-epochs", type=int, default=30, help="Epochs to linearly ramp up unsupervised loss after warmup (default: 30)")
+    parser.add_argument("--lambda-u", type=float, default=1.0, help="Unsupervised loss weight")
+    parser.add_argument("--rampup-epochs", type=int, default=10, help="Epochs to linearly ramp up unsupervised loss after warmup (default: 10)")
     parser.add_argument("--accum-steps", type=int, default=2, help="Gradient accumulation steps to imitate 2-GPU mini-batch (Section 4.2)")
 
     # System / Dataloader settings
@@ -159,7 +159,6 @@ def main():
 
     start_epoch = 0
     best_val_top1 = 0.0
-    history = []
 
     # Resume from checkpoint if specified
     if args.resume:
@@ -175,18 +174,6 @@ def main():
             start_epoch = checkpoint.get('epoch', 0)
             best_val_top1 = checkpoint.get('best_val_top1', checkpoint.get('val_top1', 0.0))
             print(f"=> Resumed from Epoch {start_epoch} (Best Val Top-1: {best_val_top1:.2f}%)")
-
-            # Load and prune previous history up to start_epoch
-            hist_file = os.path.join(args.output_dir, "training_history.json")
-            if os.path.isfile(hist_file):
-                try:
-                    import json
-                    with open(hist_file, "r") as f:
-                        old_history = json.load(f)
-                        history = [h for h in old_history if h.get("epoch", 0) <= start_epoch]
-                    print(f"=> Preserved {len(history)} prior history entries up to Epoch {start_epoch}")
-                except Exception as e:
-                    print(f"=> Note: Could not load prior history: {e}")
         else:
             print(f"[Warning] Checkpoint '{args.resume}' not found! Starting training from scratch.")
 
@@ -216,8 +203,8 @@ def main():
                 logits_l = model(labeled_clips)
                 loss_s = ce_loss_fn(logits_l, labeled_targets)
                 loss = loss_s
-                rampup_weight = 0.0
             else:
+                # FixMatch: joint forward pass (labeled + weak + strong) for unified BatchNorm stats
                 try:
                     unlabeled_batch = next(unlabeled_iter)
                 except StopIteration:
@@ -229,28 +216,29 @@ def main():
                 unlabeled_strong = unlabeled_strong.to(device, non_blocking=True)
                 bz_u = unlabeled_weak.size(0)
 
+                # Concatenate labeled, weak, and strong batches into a single joint tensor
+                joint_inputs = torch.cat([labeled_clips, unlabeled_weak, unlabeled_strong], dim=0)
+                joint_logits = model(joint_inputs)
+
+                logits_l = joint_logits[:bz_l]
+                logits_u_w, logits_u_s = joint_logits[bz_l:].chunk(2)
+
+                loss_s = ce_loss_fn(logits_l, labeled_targets)
+
+                # Pseudo-label assignment from weak views (detached target)
+                with torch.no_grad():
+                    probs_weak = F.softmax(logits_u_w, dim=-1)
+                    max_probs, pseudo_labels = torch.max(probs_weak, dim=-1)
+                    mask = (max_probs >= args.threshold)
+                    num_confident = mask.sum().item()
+
                 # Linear rampup of unsupervised loss post-warmup
                 if args.rampup_epochs > 0:
                     rampup_weight = min(1.0, float(epoch - args.warmup_epochs + 1) / float(args.rampup_epochs))
                 else:
                     rampup_weight = 1.0
 
-                # 1. Supervised forward pass
-                logits_l = model(labeled_clips)
-                loss_s = ce_loss_fn(logits_l, labeled_targets)
-
-                # 2. Weak views act strictly as teacher (pseudo-label generator under torch.no_grad)
-                # Detaching weak views prevents mode collapse and circular gradient feedback
-                with torch.no_grad():
-                    logits_u_w = model(unlabeled_weak)
-                    probs_weak = F.softmax(logits_u_w, dim=-1)
-                    max_probs, pseudo_labels = torch.max(probs_weak, dim=-1)
-                    mask = (max_probs >= args.threshold)
-                    num_confident = mask.sum().item()
-
                 if num_confident > 0:
-                    # 3. Strong views act as student (gradients flow to model)
-                    logits_u_s = model(unlabeled_strong)
                     loss_u = F.cross_entropy(logits_u_s[mask], pseudo_labels[mask], reduction='sum') / float(bz_u)
                     loss = loss_s + rampup_weight * args.lambda_u * loss_u
                     loss_u_val = loss_u.item()
@@ -280,11 +268,10 @@ def main():
         avg_loss_u = running_loss_u / max(1, num_batches)
         conf_ratio = (total_confident_samples / max(1, total_unlabeled_samples)) * 100.0
 
-        ramp_str = f" | Ramp: {rampup_weight:.2f}" if (args.rampup_epochs > 0 and epoch >= args.warmup_epochs and rampup_weight < 1.0) else ""
         if (epoch + 1) % 5 == 0 or epoch == 0 or epoch == args.warmup_epochs:
             print(
                 f"Epoch [{epoch+1:03d}/{args.epochs:03d}] | LR: {current_lr:.5f} | "
-                f"Loss_S: {avg_loss_s:.4f} | Loss_U: {avg_loss_u:.4f}{ramp_str} | "
+                f"Loss_S: {avg_loss_s:.4f} | Loss_U: {avg_loss_u:.4f} | "
                 f"Pseudo Mask: {conf_ratio:.1f}% ({total_confident_samples}/{total_unlabeled_samples})",
                 flush=True
             )
@@ -312,22 +299,6 @@ def main():
                 flush=True
             )
 
-            history.append({
-                "epoch": epoch + 1,
-                "lr": round(current_lr, 6),
-                "loss_s": round(avg_loss_s, 4),
-                "loss_u": round(avg_loss_u, 4),
-                "rampup_weight": round(rampup_weight, 2) if epoch >= args.warmup_epochs else 0.0,
-                "pseudo_mask_percent": round(conf_ratio, 2),
-                "val_top1": round(val_top1, 2),
-                "val_top5": round(val_top5, 2)
-            })
-
-            # Save training metrics history JSON
-            import json
-            with open(os.path.join(args.output_dir, "training_history.json"), "w") as f:
-                json.dump(history, f, indent=2)
-
         # Save latest checkpoint after every epoch for seamless resumption
         torch.save({
             'epoch': epoch + 1,
@@ -347,22 +318,9 @@ def main():
             }, os.path.join(args.output_dir, "final_model.pth"))
 
     elapsed = time.time() - start_time
-    import json
-    summary = {
-        "model": "FixMatch Baseline (RGB only, weak/strong consistency)",
-        "dataset": "UCF-101 Split 1 (10% Labeled)",
-        "best_epoch": max(history, key=lambda x: x["val_top1"])["epoch"] if history else args.epochs,
-        "best_val_top1": round(best_val_top1, 2),
-        "total_training_hours": round(elapsed / 3600.0, 2),
-        "checkpoint": os.path.join(args.output_dir, "best_model.pth")
-    }
-    with open(os.path.join(args.output_dir, "metrics.json"), "w") as f:
-        json.dump(summary, f, indent=2)
-
     print("=" * 60)
     print(f"Training completed in {elapsed / 3600:.2f} hours. Best Val Top-1: {best_val_top1:.2f}%")
     print(f"Best model checkpoint saved to: {os.path.join(args.output_dir, 'best_model.pth')}")
-    print(f"Metrics saved to: {os.path.join(args.output_dir, 'metrics.json')}")
     print("=" * 60)
 
 

@@ -1,0 +1,6 @@
+{
+  "checkpoint": "C:\\Code\\P24-CV\\checkpoints\\supervised_baseline\\best_model.pth",
+  "best_epoch": 120,
+  "val_top1": 29.84,
+  "val_top5": 54.64
+}
