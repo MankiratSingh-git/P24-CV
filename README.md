@@ -6,18 +6,21 @@ This repository reproduces and benchmarks semi-supervised action recognition met
 
 ---
 
-## 📊 Benchmark Targets (UCF-101, 10% Labeled Data, Split 1)
+## Empirical Benchmark Results (UCF-101, 10% Labeled Data, Split 1)
 
-| Method | Modality | Backbone | Frames | Features / Tricks | Paper Accuracy (%) |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Supervised Baseline** | RGB | 3D-ResNet-18 | 8 | 10% labeled data only | ~24.7% – 28.5% |
-| **FixMatch Baseline** | RGB | 3D-ResNet-18 | 8 | Pseudo-labeling ($\tau=0.3$) + RandAugment + Cutout | **51.7%** (Table 5) |
-| **F2-FixMatch (A1)** | RGB + TG | 3D-ResNet-18 | 8 | Bi-modal Frame-level W/S-Aug ($Z_w, Z_s$) | **67.9%** (Table 4) |
-| **F2-FixMatch (Full)** | RGB + TG | 3D-ResNet-18 | 8 | P-Aug ($Z_w, Z_s, Z_{w_p}, Z_{s_p}$) + MPL | **71.1%** (Table 3) |
+All models evaluated under the official paper protocol (Section 4.2): 10 uniform temporal clips x 3 spatial crops = **30 views per video** ($256 \times 256$ resolution, evaluated across all 3,783 validation videos).
+
+| Method | Modality | Backbone | Frames | Training Strategy | Top-1 Accuracy (%) | Top-5 Accuracy (%) | Gain vs. Supervised | Gain vs. FixMatch |
+| :--- | :---: | :---: | :---: | :--- | :---: | :---: | :---: | :---: |
+| **Supervised Baseline** | RGB | 3D-ResNet-18 | 8 | 10% labeled data only | **31.32%** | **54.11%** | Reference | — |
+| **FixMatch Baseline** | RGB | 3D-ResNet-18 | 8 | Pseudo-labeling ($\tau=0.3$) + RandAugment + Cutout | **38.49%** | **64.00%** | **+7.17%** | Reference |
+| **F2-FixMatch (Full)** | RGB + TG | 3D-ResNet-18 | 8 | P-Aug ($Z_w, Z_s, Z_{w_p}, Z_{s_p}$) + MPL | **59.90%** | **83.32%** | **+28.58%** | **+21.41%** |
+
+Detailed per-class breakdowns, training histories, and metric curves are documented in [RESULTS.md](RESULTS.md).
 
 ---
 
-## 🛠️ Architecture: 3D-ResNet-18 (Table 2 in Paper)
+## Architecture: 3D-ResNet-18 (Table 2 in Paper)
 
 - **Input**: 8 frames per clip sampled with stride of 8 (covering 64 frames), resolution $224 \times 224$.
 - **conv1**: $1 \times 7 \times 7$ kernel, 64 channels, spatial stride 2 (temporal stride 1).
@@ -32,7 +35,7 @@ This repository reproduces and benchmarks semi-supervised action recognition met
 
 ---
 
-## 🚀 Step-by-Step Execution Guide
+## Step-by-Step Execution Guide
 
 ### 1. Environment Setup
 
@@ -70,7 +73,7 @@ python download_ucf101.py --dest data/ucf101 --synthetic
 ### 4. Training Pipelines
 
 #### Pipeline 1: Supervised Baseline (10% Labeled Data Only)
-Trains the 3D-ResNet-18 backbone strictly on the 10% labeled split without unlabeled data:
+Trains the 3D-ResNet-18 backbone strictly on the 10% labeled split without unlabeled data (Achieves **31.32%** Top-1 / **54.11%** Top-5):
 ```powershell
 python train_supervised_baseline.py `
   --data-root data/ucf101 `
@@ -84,7 +87,7 @@ python train_supervised_baseline.py `
 ```
 
 #### Pipeline 2: FixMatch Baseline (RGB Only)
-Trains standard FixMatch with weak/strong augmentation consistency on UCF-101 (Paper Table 5 baseline: **51.7%**):
+Trains standard FixMatch with weak/strong augmentation consistency on UCF-101 (Achieves **38.49%** Top-1 / **64.00%** Top-5):
 ```powershell
 python train_fixmatch_baseline.py `
   --data-root data/ucf101 `
@@ -101,7 +104,7 @@ python train_fixmatch_baseline.py `
 ```
 
 #### Pipeline 3: F2-FixMatch (Full Framework: P-Aug + MPL)
-Trains the complete F2-FixMatch model with bi-modal inputs (RGB + TG), progressive frame- and feature-level perturbations, and multihead pseudo-labeling (Paper Table 3: **71.1%**):
+Trains the complete F2-FixMatch model with bi-modal inputs (RGB + TG), progressive frame- and feature-level perturbations, and multihead pseudo-labeling (Achieves **59.90%** Top-1 / **83.32%** Top-5):
 ```powershell
 python train_f2_fixmatch.py `
   --data-root data/ucf101 `
@@ -128,7 +131,7 @@ Evaluate any trained checkpoint using the official testing protocol (10 clips $\
 ```powershell
 # Full 10-clip x 3-crop paper protocol:
 python evaluate.py `
-  --checkpoint checkpoints/fixmatch_baseline/best_model.pth `
+  --checkpoint checkpoints/f2_fixmatch/best_model.pth `
   --data-root data/ucf101 `
   --splits-dir data/splits `
   --split 1 `
@@ -136,7 +139,7 @@ python evaluate.py `
 
 # Fast 1-clip center-crop evaluation:
 python evaluate.py `
-  --checkpoint checkpoints/fixmatch_baseline/best_model.pth `
+  --checkpoint checkpoints/f2_fixmatch/best_model.pth `
   --data-root data/ucf101 `
   --splits-dir data/splits `
   --split 1 `
