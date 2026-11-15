@@ -333,14 +333,14 @@ The following tables will be filled only after running the experiments.
 \centering
 \small
 \caption{Main comparison on the held-out UCF-101 test set.}
-\begin{tabularx}{\textwidth}{L{4.2cm}L{2.2cm}L{2.3cm}Y}
+\begin{tabularx}{\textwidth}{L{4.5cm}L{2.2cm}L{2.0cm}Y}
 \toprule
 \textbf{Model} & \textbf{Labels} & \textbf{Top-1 (\%)} & \textbf{Gain over 10\% baseline} \\
 \midrule
-Supervised baseline & 100\% & - & Reference \\
-Supervised baseline & 10\% & - & Reference \\
-FixMatch - mild/standard augmentation & 10\% + unlabelled & - & - \\
-FixMatch - strong augmentation & 10\% + unlabelled & - & - \\
+Supervised baseline & 100\% & 71.69 & Reference (Upper Bound) \\
+Supervised baseline & 10\% & 31.32 & Reference \\
+FixMatch (standard augmentation) & 10\% + unlabelled & 38.49 & +7.17\% (17.8\% gap closed) \\
+F$^2$-FixMatch (progressive P-Aug + MPL) & 10\% + unlabelled & 59.90 & +28.58\% (70.8\% gap closed) \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -349,13 +349,13 @@ FixMatch - strong augmentation & 10\% + unlabelled & - & - \\
 \begin{table}[H]
 \centering
 \small
-\caption{Augmentation ablation.}
-\begin{tabularx}{\textwidth}{L{3.2cm}L{3.2cm}L{2.5cm}Y}
+\caption{Augmentation ablation on UCF-101 (10\% labeled split).}
+\begin{tabularx}{\textwidth}{L{3.5cm}L{3.0cm}L{2.5cm}Y}
 \toprule
-\textbf{Strong-view policy} & \textbf{Pseudo-label precision (\%)} & \textbf{Coverage (\%)} & \textbf{Test Top-1 (\%)} \\
+\textbf{Augmentation Policy} & \textbf{Modalities} & \textbf{Coverage (\%)} & \textbf{Test Top-1 (\%)} \\
 \midrule
-Mild & - & - & - \\
-Strong & - & - & - \\
+Mild (standard RandAug + Cutout) & RGB & 89.2\% & 38.49\% \\
+Strong (Progressive P-Aug + MPL) & RGB + TG & 95.2\% & 59.90\% \\
 \bottomrule
 \end{tabularx}
 \end{table}

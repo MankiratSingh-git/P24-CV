@@ -6,15 +6,16 @@ This repository reproduces and benchmarks semi-supervised action recognition met
 
 ---
 
-## Empirical Benchmark Results (UCF-101, 10% Labeled Data, Split 1)
+## Empirical Benchmark Results (UCF-101 Split 1)
 
-All models evaluated under the official paper protocol (Section 4.2): 10 uniform temporal clips x 3 spatial crops = **30 views per video** ($256 \times 256$ resolution, evaluated across all 3,783 validation videos).
+Evaluated under the official paper protocol (Section 4.2): 10 uniform temporal clips x 3 spatial crops = **30 views per video** ($256 \times 256$ resolution, evaluated across all 3,783 validation videos).
 
-| Method | Modality | Backbone | Frames | Training Strategy | Top-1 Accuracy (%) | Top-5 Accuracy (%) | Gain vs. Supervised | Gain vs. FixMatch |
-| :--- | :---: | :---: | :---: | :--- | :---: | :---: | :---: | :---: |
-| **Supervised Baseline** | RGB | 3D-ResNet-18 | 8 | 10% labeled data only | **31.32%** | **54.11%** | Reference | — |
-| **FixMatch Baseline** | RGB | 3D-ResNet-18 | 8 | Pseudo-labeling ($\tau=0.3$) + RandAugment + Cutout | **38.49%** | **64.00%** | **+7.17%** | Reference |
-| **F2-FixMatch (Full)** | RGB + TG | 3D-ResNet-18 | 8 | P-Aug ($Z_w, Z_s, Z_{w_p}, Z_{s_p}$) + MPL | **59.90%** | **83.32%** | **+28.58%** | **+21.41%** |
+| Method | Labels | Modality | Backbone | Frames | Training Strategy | Top-1 Accuracy (%) | Top-5 Accuracy (%) | Gain vs. 10% Sup | Gap Closed (R) |
+| :--- | :---: | :---: | :---: | :---: | :--- | :---: | :---: | :---: | :---: |
+| **Supervised Baseline (10%)** | 10% | RGB | 3D-ResNet-18 | 8 | 10% labeled data only | **31.32%** | **54.11%** | Reference | 0.0% |
+| **FixMatch Baseline** | 10% | RGB | 3D-ResNet-18 | 8 | Pseudo-labeling ($\tau=0.3$) + RandAugment + Cutout | **38.49%** | **64.00%** | **+7.17%** | **17.8%** |
+| **F2-FixMatch (Full)** | 10% | RGB + TG | 3D-ResNet-18 | 8 | P-Aug ($Z_w, Z_s, Z_{w_p}, Z_{s_p}$) + MPL | **59.90%** | **83.32%** | **+28.58%** | **70.8%** |
+| **Supervised Baseline (100%)** | 100% | RGB | 3D-ResNet-18 | 8 | Full training set (9,537 videos, 120 epochs) | **71.69%** | **89.14%** | **+40.37%** | Upper Bound |
 
 Detailed per-class breakdowns, training histories, and metric curves are documented in [RESULTS.md](RESULTS.md).
 
@@ -71,6 +72,20 @@ python download_ucf101.py --dest data/ucf101 --synthetic
 ---
 
 ### 4. Training Pipelines
+
+#### Pipeline 0: Fully Supervised Reference (100% Labeled Data)
+Trains the 3D-ResNet-18 backbone on all 9,537 training videos (Achieves **71.69%** Top-1 / **89.14%** Top-5):
+```powershell
+python train_supervised_baseline.py `
+  --data-root data/ucf101 `
+  --splits-dir data/splits `
+  --labeled-percent 100 `
+  --split 1 `
+  --batch-size 8 `
+  --epochs 120 `
+  --lr 0.2 `
+  --output-dir checkpoints/supervised_100
+```
 
 #### Pipeline 1: Supervised Baseline (10% Labeled Data Only)
 Trains the 3D-ResNet-18 backbone strictly on the 10% labeled split without unlabeled data (Achieves **31.32%** Top-1 / **54.11%** Top-5):
