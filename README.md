@@ -1,80 +1,86 @@
-# Semi-Supervised Action Recognition: FixMatch & F2-FixMatch on UCF-101
+# Semi-Supervised Action Recognition: FixMatch & $F^2$-FixMatch on UCF-101
 
-This repository reproduces and benchmarks semi-supervised action recognition methods on the **UCF-101** dataset using **10% labeled data** and **90% unlabeled data**, as presented in:
-1. **FixMatch**: *"FixMatch: Simplifying Semi-Supervised Learning with Consistency and Confidence"* (Sohn et al., NeurIPS 2020)
-2. **F2-FixMatch**: *"Leveraging Frame- and Feature-level Progressive Augmentation for Semi-supervised Action Recognition"* (Tu et al., ACM TOMM 2025)
-
----
-
-## Empirical Benchmark Results (UCF-101 Split 1)
-
-Evaluated under the official paper protocol (Section 4.2): 10 uniform temporal clips x 3 spatial crops = **30 views per video** ($256 \times 256$ resolution, evaluated across all 3,783 validation videos).
-
-| Method | Labels | Modality | Backbone | Frames | Training Strategy | Top-1 Accuracy (%) | Top-5 Accuracy (%) | Gain vs. 10% Sup | Gap Closed (R) |
-| :--- | :---: | :---: | :---: | :---: | :--- | :---: | :---: | :---: | :---: |
-| **Supervised Baseline (10%)** | 10% | RGB | 3D-ResNet-18 | 8 | 10% labeled data only | **31.32%** | **54.11%** | Reference | 0.0% |
-| **FixMatch Baseline** | 10% | RGB | 3D-ResNet-18 | 8 | Pseudo-labeling ($\tau=0.3$) + RandAugment + Cutout | **38.49%** | **64.00%** | **+7.17%** | **17.8%** |
-| **F2-FixMatch (Full)** | 10% | RGB + TG | 3D-ResNet-18 | 8 | P-Aug ($Z_w, Z_s, Z_{w_p}, Z_{s_p}$) + MPL | **59.90%** | **83.32%** | **+28.58%** | **70.8%** |
-| **Supervised Baseline (100%)** | 100% | RGB | 3D-ResNet-18 | 8 | Full training set (9,537 videos, 120 epochs) | **71.69%** | **89.14%** | **+40.37%** | Upper Bound |
-
-Detailed per-class breakdowns, training histories, and metric curves are documented in [RESULTS.md](RESULTS.md).
+This repository reproduces and benchmarks semi-supervised video action recognition methods on **UCF-101** using **10% labeled data** (953 videos) and **90% unlabeled data** (8,584 videos). It implements and evaluates:
+1. **FixMatch**: *"FixMatch: Simplifying Semi-Supervised Learning with Consistency and Confidence"* (Sohn et al., NeurIPS 2020) adapted to 3D video recognition.
+2. **$F^2$-FixMatch**: *"Leveraging Frame- and Feature-level Progressive Augmentation for Semi-supervised Action Recognition"* (Tu et al., ACM TOMM 2025).
 
 ---
 
-## Architecture: 3D-ResNet-18 (Table 2 in Paper)
+## 1. Benchmark Results (UCF-101 Split 1)
 
-- **Input**: 8 frames per clip sampled with stride of 8 (covering 64 frames), resolution $224 \times 224$.
-- **conv1**: $1 \times 7 \times 7$ kernel, 64 channels, spatial stride 2 (temporal stride 1).
-- **pool1**: $1 \times 3 \times 3$ max pool, spatial stride 2 (temporal stride 1).
-- **res2**: 2 blocks, $1 \times 3 \times 3$ 2D spatial kernels, 64 channels.
-- **res3**: 2 blocks, $1 \times 3 \times 3$ 2D spatial kernels, 128 channels, spatial stride 2.
-- **res4**: 2 blocks, $3 \times 3 \times 3$ inflated 3D kernels, 256 channels, spatial stride 2.
-- **res5**: 2 blocks, $3 \times 3 \times 3$ inflated 3D kernels, 512 channels, spatial stride 2.
-- **Classifier Head**: `AdaptiveAvgPool3d((1, 1, 1)) -> Dropout(0.5) -> Linear(512, 101)`.
-- *Key Property*: No temporal downsampling throughout the network; temporal dimension $T=8$ is preserved.
-- *Temporal Gradient (TG)*: $x_t^G = (x_t^V - x_{t+1}^V + 255) / 2$. A single shared encoder extracts representations for both RGB and TG modalities.
+Evaluated strictly under the official paper protocol (Section 4.2): 10 uniform temporal clips $\times$ 3 spatial crops = **30 views per video** ($256 \times 256$ resolution, evaluated across all 3,783 validation videos, 113,490 total clips per model).
+
+| Method | Labels | Modality | Backbone | Training Strategy | Top-1 Accuracy (%) | Top-5 Accuracy (%) | Absolute Gain | Gap Closed ($R$) |
+| :--- | :---: | :---: | :---: | :--- | :---: | :---: | :---: | :---: |
+| **Supervised Baseline (10%)** | 10% | RGB | 3D-ResNet-18 | 10% labeled data only (CE loss) | **31.32%** | **54.11%** | *Reference* | 0.0% |
+| **FixMatch Baseline** | 10% | RGB | 3D-ResNet-18 | Pseudo-labeling ($\tau=0.3$) + RandAug + Cutout | **38.49%** | **64.00%** | **+7.17%** | **17.8%** |
+| **$F^2$-FixMatch (Full Framework)** | 10% | **RGB + TG** | 3D-ResNet-18 | **P-Aug ($Z_w, Z_s, Z_{w_p}, Z_{s_p}$) + MPL** | **59.90%** | **83.32%** | **+28.58%** | **70.8%** |
+| **Supervised Reference (100%)** | 100% | RGB | 3D-ResNet-18 | Full dataset (9,537 videos, 120 ep) | **71.69%** | **89.14%** | **+40.37%** | *Upper Bound* |
+
+* For complete per-class breakdowns, failure analysis, and negative transfer cases, see [RESULTS.md](RESULTS.md).
+* For detailed mathematical derivations, P-Aug formulation, and MMAction2 architecture, see [METHODOLOGY.md](METHODOLOGY.md).
 
 ---
 
-## Step-by-Step Execution Guide
+## 2. Key Insights & Negative Analysis Summary
 
-### 1. Environment Setup
+* **Supervision Gap Recovery**: $F^2$-FixMatch closes **70.8%** of the performance gap toward full 100% supervision using only one-tenth of the annotations.
+* **Where the Model Excels ($\ge 90\%$ Top-1)**: Highly effective on categories with prominent macro-body motion and distinctive visual context (`CleanAndJerk` 100.0%, `BasketballDunk` 100.0%, `BenchPress` 97.9%, `Diving` 97.8%, `Surfing` 97.0%).
+* **Where the Model Fails ($< 20\%$ Top-1)**: Struggles on subtle micro-movements inside static scenes (`Hammering` 0.0%, `Shotput` 0.0%, `Basketball` 2.9%, `BlowingCandles` 3.0%, `PizzaTossing` 6.1%).
+* **Negative Transfer (13 Classes)**: In 13 categories, semi-supervised learning suffered from pseudo-label confirmation bias and underperformed 10% supervised training (e.g., `BreastStroke` dropped -35.7%, `CliffDiving` dropped -23.1%). See Section 3 of [RESULTS.md](RESULTS.md).
+
+---
+
+## 3. Architecture: 3D-ResNet-18 (Table 2 in Paper)
+
+- **Backbone**: 3D-ResNet-18 (31.92M parameters), inflated from 2D ResNet-18.
+- **Input**: 8 frames per clip sampled with a stride of 8 (covering 64 raw frames), resolution $224 \times 224$.
+- **Temporal Gradient (TG)**: $x_t^G = (x_t^V - x_{t+1}^V + 255) / 2$. A single shared encoder extracts representations for both RGB and TG streams.
+- **Temporal Resolution**: No temporal pooling or temporal stride throughout the network; $T=8$ is preserved up to global pooling.
+- **Decoupled Heads**:
+  - $C_{3D}$: Evaluates frame-level representations and generates all pseudo-labels.
+  - $C_{TAP}$: Evaluates feature-perturbed representations after Temporal Average Pooling.
+
+---
+
+## 4. Execution Guide
+
+### 4.1 Environment Setup
 
 Activate the virtual environment (or use your preferred Python environment):
 ```powershell
 # In PowerShell:
 .\.venv\Scripts\Activate.ps1
 
-# Install requirements (if not already installed):
+# Install dependencies:
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 pip install -r requirements.txt
 ```
 
-### 2. Verify Pipeline & Architecture
-
-Run the built-in verification suite to validate shapes, augmentations, and backprop:
+Verify pipeline shapes, tensor dimensions, and backpropagation:
 ```powershell
 python verify_pipeline.py
 ```
 
-### 3. Download / Prepare UCF-101 Dataset
+---
 
-#### Option A: Full Official Dataset (HuggingFace CDN Mirror, ~6.5 GB)
+### 4.2 Dataset Setup
+
+#### Option A: Full UCF-101 Dataset (~6.5 GB)
 ```powershell
 python download_ucf101.py --dest data/ucf101
 ```
 
-#### Option B: Synthetic Test Dataset (Instant, for smoke testing and pipeline validation)
+#### Option B: Synthetic Test Dataset (Instant pipeline smoke test)
 ```powershell
 python download_ucf101.py --dest data/ucf101 --synthetic
 ```
 
 ---
 
-### 4. Training Pipelines
+### 4.3 Training Pipelines
 
 #### Pipeline 0: Fully Supervised Reference (100% Labeled Data)
-Trains the 3D-ResNet-18 backbone on all 9,537 training videos (Achieves **71.69%** Top-1 / **89.14%** Top-5):
 ```powershell
 python train_supervised_baseline.py `
   --data-root data/ucf101 `
@@ -88,7 +94,6 @@ python train_supervised_baseline.py `
 ```
 
 #### Pipeline 1: Supervised Baseline (10% Labeled Data Only)
-Trains the 3D-ResNet-18 backbone strictly on the 10% labeled split without unlabeled data (Achieves **31.32%** Top-1 / **54.11%** Top-5):
 ```powershell
 python train_supervised_baseline.py `
   --data-root data/ucf101 `
@@ -101,62 +106,61 @@ python train_supervised_baseline.py `
   --output-dir checkpoints/supervised_baseline
 ```
 
-#### Pipeline 2: FixMatch Baseline (RGB Only)
-Trains standard FixMatch with weak/strong augmentation consistency on UCF-101 (Achieves **38.49%** Top-1 / **64.00%** Top-5):
+#### Pipeline 2: FixMatch Baseline (10% Labeled + 90% Unlabeled RGB)
 ```powershell
 python train_fixmatch_baseline.py `
   --data-root data/ucf101 `
   --splits-dir data/splits `
-  --labeled-percent 10 `
   --split 1 `
-  --batch-size 4 `
-  --mu 4 `
-  --threshold 0.3 `
-  --warmup-epochs 40 `
+  --batch-size 8 `
   --epochs 220 `
   --lr 0.2 `
+  --threshold 0.3 `
+  --lambda-u 2.0 `
+  --rampup-epochs 30 `
+  --warmup-epochs 40 `
   --output-dir checkpoints/fixmatch_baseline
 ```
 
-#### Pipeline 3: F2-FixMatch (Full Framework: P-Aug + MPL)
-Trains the complete F2-FixMatch model with bi-modal inputs (RGB + TG), progressive frame- and feature-level perturbations, and multihead pseudo-labeling (Achieves **59.90%** Top-1 / **83.32%** Top-5):
+#### Pipeline 3: $F^2$-FixMatch (Full Framework: RGB + TG + P-Aug + MPL)
 ```powershell
 python train_f2_fixmatch.py `
   --data-root data/ucf101 `
   --splits-dir data/splits `
-  --labeled-percent 10 `
   --split 1 `
-  --batch-size 4 `
-  --mu 4 `
+  --batch-size 8 `
+  --epochs 220 `
+  --lr 0.2 `
   --threshold 0.3 `
   --alpha 2.0 `
   --beta 2.0 `
   --gamma 1.0 `
+  --rampup-epochs 30 `
   --warmup-epochs 40 `
-  --epochs 220 `
-  --lr 0.2 `
   --output-dir checkpoints/f2_fixmatch
 ```
 
 ---
 
-### 5. Evaluation Protocol
+### 4.4 Evaluation Protocol (30-View Multi-Crop)
 
-Evaluate any trained checkpoint using the official testing protocol (10 clips $\times$ 3 spatial crops = 30 views per video, RGB modality only):
+To evaluate any saved checkpoint under the official paper protocol (10 uniform temporal clips $\times$ 3 spatial crops = 30 views):
 ```powershell
-# Full 10-clip x 3-crop paper protocol:
 python evaluate.py `
   --checkpoint checkpoints/f2_fixmatch/best_model.pth `
   --data-root data/ucf101 `
   --splits-dir data/splits `
-  --split 1 `
-  --eval-mode full
-
-# Fast 1-clip center-crop evaluation:
-python evaluate.py `
-  --checkpoint checkpoints/f2_fixmatch/best_model.pth `
-  --data-root data/ucf101 `
-  --splits-dir data/splits `
-  --split 1 `
-  --eval-mode single
+  --eval-mode full `
+  --crop-size 256
 ```
+
+---
+
+## 5. Artifact Registry
+
+| Model | Checkpoint Path | Evaluation Metrics |
+| :--- | :--- | :--- |
+| **$F^2$-FixMatch** | `checkpoints/f2_fixmatch/best_model.pth` | `checkpoints/f2_fixmatch/eval_metrics_full30view.json` |
+| **FixMatch Baseline** | `checkpoints/fixmatch_baseline/best_model.pth` | `checkpoints/fixmatch_baseline/eval_metrics_full30view.json` |
+| **Supervised (10%)** | `checkpoints/supervised_baseline/best_model.pth` | `checkpoints/supervised_baseline/eval_metrics_full30view.json` |
+| **Supervised (100%)** | `checkpoints/supervised_100/best_model.pth` | `checkpoints/supervised_100/metrics.json` |
