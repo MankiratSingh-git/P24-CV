@@ -10,70 +10,59 @@ To systematically evaluate the benefit of unlabeled video data, this repository 
 
 1. **Supervised Baseline (10% Labels Only)**: Trained exclusively on the 953 labeled videos with standard cross-entropy loss, establishing the lower-bound reference.
 2. **FixMatch Baseline (Single-Stream RGB)**: Adapts consistency-based pseudo-labeling (Sohn et al., NeurIPS 2020) to 3D video recognition using weak-to-strong spatial augmentations (RandAugment + Cutout) and confidence thresholding ($\tau = 0.3$).
-3. **$F^2$-FixMatch (Full Framework)**: State-of-the-art semi-supervised video framework (Tu et al., ACM TOMM 2025) integrating bi-modal representations (RGB + dynamic Temporal Gradient), **Progressive Augmentation (P-Aug)** across frame and feature spaces, and **Multihead Pseudo-Labeling (MPL)** with decoupled classification heads.
+3. **$F^2$-FixMatch (Full Framework)**: State-of-the-art semi-supervised video framework (Tu et al., ACM TOMM 2025) integrating bi-modal representations (RGB + dynamic Temporal Gradient), **Frame-Level FixMatch**, and a unified **Feature-Level Consistency Module (P-Aug + MPL)** with decoupled classification heads.
 4. **Supervised Upper Bound (Oracle, 100% Labels)**: Full-supervision ceiling trained across all 9,537 annotated videos.
 
 ---
 
-## 2. Theoretical Formulation & Method Distinction
+## 2. Theoretical Formulation & System Architecture
 
-A critical methodological distinction must be made between standard FixMatch and $F^2$-FixMatch:
+The $F^2$-FixMatch architecture operates across three distinct hierarchical levels:
 
-```mermaid
-flowchart TD
-    subgraph Single_Stream["FixMatch Baseline (RGB Single-Stream)"]
-        InRGB1["Unlabeled Video Clip (x_V)"]
-        WeakAug1["Weak Spatial Aug (A_w)"]
-        StrongAug1["Strong Spatial Aug (A_s)"]
-        Enc1["3D-ResNet-18 Backbone"]
-        Head1["Single 3D Classifier Head (C_3D)"]
-        Mask1["Confidence Threshold (tau=0.3)"]
-        Loss1["Consistency Loss: L_u = m * CE(p_s, y_hat)"]
-        
-        InRGB1 --> WeakAug1 & StrongAug1
-        WeakAug1 --> Enc1 --> Head1 --> Mask1
-        StrongAug1 --> Enc1 --> Head1
-        Mask1 & Head1 --> Loss1
-    end
-
-    subgraph Bi_Modal["F²-FixMatch (Bi-Modal RGB + TG + Progressive Augmentation)"]
-        InRGB2["RGB Video Clip (x_V)"]
-        InTG2["Temporal Gradient (x_G)<br/>x_t^G = (x_t^V - x_{t+1}^V + 255) / 2"]
-        PAugFrame["Frame-Level Progressive Aug (Z_w, Z_s)"]
-        Enc2["Shared 3D-ResNet-18 Backbone"]
-        PAugFeat["Feature-Level Perturbations (P-Aug)<br/>TAP + Dropout + HFlip + CutMix"]
-        Head3D["3D Head (C_3D)<br/>Generates Pseudo-Labels"]
-        HeadTAP["TAP Head (C_TAP)<br/>Supervised by 3D Head"]
-        MPLLoss["Multihead Loss: L = L_s + alpha*L_u^s + beta*L_u^{w_p} + gamma*L_u^{s_p}"]
-
-        InRGB2 & InTG2 --> PAugFrame --> Enc2 --> PAugFeat
-        Enc2 --> Head3D
-        PAugFeat --> HeadTAP
-        Head3D & HeadTAP --> MPLLoss
-    end
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   INPUT & MODALITY LEVEL                                        │
+│  - RGB Video Stream: x^V in R^{3 x T x H x W}                                                   │
+│  - Temporal Gradient Stream: x^G = (x_t^V - x_{t+1}^V + 255) / 2                                │
+└───────────────────────────────────────────────┬─────────────────────────────────────────────────┘
+                                                │
+                                                ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 FRAME-LEVEL FIXMATCH (Dual Stream)                              │
+│  - Weak RGB + Weak TG -> Shared Backbone -> Ensemble Pseudo-Label:                              │
+│      p_w = 0.5 * (p_w^{RGB} + p_w^{TG}),  y_hat = argmax(p_w),  mask = 1[max(p_w) >= tau]       │
+│  - Strong RGB + Strong TG -> Shared Backbone -> 3D Head -> Cross-Entropy with y_hat             │
+│  - Objective: alpha * L_u^s                                                                     │
+└───────────────────────────────────────────────┬─────────────────────────────────────────────────┘
+                                                │
+                                                ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                     UNIFIED FEATURE-LEVEL CONSISTENCY MODULE (P-Aug + MPL)                      │
+│  - P-Aug (Feature-Level Perturbations):                                                         │
+│      * Z_w -> Z_{w_p}: Detached weak feature + TAP + Spatial Dropout + CutMix                   │
+│      * Z_s -> Z_{s_p}: Strong feature + TAP + Spatial Dropout + CutMix                          │
+│  - MPL (Multi-branch Pseudo-Label Loss via Decoupled Head C_TAP):                               │
+│      * Objective: beta * L_u^{w_p} + gamma * L_u^{s_p}                                          │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.1 Why $F^2$-FixMatch is Not Merely an "Augmentation Ablation"
-In early project drafts, $F^2$-FixMatch was occasionally mislabeled as an "augmentation ablation" of FixMatch. Methodologically, $F^2$-FixMatch introduces four fundamental components absent from standard FixMatch:
-* **Dynamic Temporal Gradient Modality**: Injects explicit frame differences $x^G$ alongside RGB $x^V$ to provide appearance-invariant velocity fields without requiring optical flow precomputation.
-* **Feature-Level Perturbation**: Injects perturbations directly into the intermediate latent representation space $\mathcal{Z} \in \mathbb{R}^{B \times 512 \times 8 \times 7 \times 7}$.
-* **Decoupled Classification Heads**: Employs two distinct heads: a Spatio-Temporal Head $C_{3D}$ and a Temporal Average Pooling Head $C_{TAP}$.
-* **Multihead Pseudo-Labeling (MPL)**: The 3D head supervises both the frame-level strongly augmented views and the feature-perturbed views through separate loss terms.
+### 2.1 Feature-Level Component Coupling
+P-Aug and the auxiliary feature-level consistency losses form the feature-level component of our implementation. The perturbations only affect the representation through the corresponding consistency losses ($\beta$ and $\gamma$). While they are structurally separable by setting $\beta$ and $\gamma$ independently, Run D ($\beta=0, \gamma=0$) disables both to isolate the aggregate effect of the feature-level consistency module from the RGB+TG dual-stream configuration.
 
 ---
 
 ## 3. Mathematical Formulation
 
 ### 3.1 Input Modalities & Sampling
-Let an input video be represented as a sequence of frames. A clip consists of $T=8$ frames sampled with a temporal stride of $s=8$ (covering a span of 64 raw video frames):
+Let an input video clip consist of $T=8$ frames sampled with temporal interval $s=8$ (spanning 64 raw video frames):
 
 1. **RGB Appearance Stream ($x^V$):**
    $$x^V = \{x_1^V, x_2^V, \dots, x_T^V\} \in \mathbb{R}^{3 \times T \times H \times W}$$
 
 2. **Temporal Gradient Dynamic Stream ($x^G$):**
-   Temporal gradients capture instantaneous velocity without the multi-gigabyte storage cost of Farnebäck or TV-L1 optical flow:
+   Temporal gradients capture instantaneous velocity without the multi-gigabyte storage cost of precomputed optical flow:
    $$x_t^G = \frac{x_t^V - x_{t+1}^V + 255}{2}, \quad t \in \{1, 2, \dots, T\}$$
-   Both modalities share the exact same spatial dimensions ($H \times W = 224 \times 224$) and are processed by a single shared 3D-ResNet-18 backbone.
+   Both modalities share spatial dimensions ($224 \times 224$) and are processed by a single shared 3D-ResNet-18 backbone.
 
 ---
 
@@ -81,66 +70,69 @@ Let an input video be represented as a sequence of frames. A clip consists of $T
 
 Progressive Augmentation applies perturbations in two cascading stages:
 
-#### Stage 1: Frame-Level Progressive Augmentation
-* **Weak Augmentation ($A_w$):** Standard scale-preserving RandomResizedCrop (scale $[0.8, 1.0]$, size $224 \times 224$) and horizontal flip with probability $p=0.5$.
+#### Stage 1: Frame-Level Augmentation
+* **Weak Augmentation ($A_w$):** Scale-preserving RandomResizedCrop (scale $[0.8, 1.0]$, size $224 \times 224$) and horizontal flip ($p=0.5$).
 * **Strong Augmentation ($A_s$):** Weak augmentation followed by **Video RandAugment** (sampled across 13 temporal operations with magnitude $M=10$) and **Video Cutout** ($128 \times 128$ rectangular spatial masking applied consistently across all $T$ frames).
 
-#### Stage 2: Feature-Level Progressive Perturbation
-Let $Z = E(x) \in \mathbb{R}^{B \times 512 \times 8 \times 7 \times 7}$ denote the feature representation extracted by the shared 3D encoder before global pooling. Four perturbations are applied:
+#### Stage 2: Feature-Level Perturbations
+Let $Z = E(x) \in \mathbb{R}^{B \times 512 \times T \times H \times W}$ denote the feature representation extracted by the shared 3D encoder before global pooling. The perturbator applies:
 1. **Temporal Average Pooling (TAP):**
-   $$\text{TAP}(Z) = \frac{1}{T} \sum_{t=1}^T Z_{:, :, t, :, :} \in \mathbb{R}^{B \times 512 \times 7 \times 7}$$
-2. **Spatial Feature Dropout:** Randomly drops feature activations with probability $p=0.5$.
-3. **Feature Horizontal Flip:** Horizontally mirrors feature maps with probability $p=0.5$.
-4. **Feature CutMix:** Swaps random rectangular feature patches across batch samples with probability $p=0.5$:
+   $$\text{TAP}(Z) = \frac{1}{T} \sum_{t=1}^T Z_{:, :, t, :, :} \in \mathbb{R}^{B \times 512 \times H \times W}$$
+2. **Spatial Feature Dropout:** Randomly zeroes 2D feature channels with probability $p=0.5$.
+3. **Feature CutMix:** Swaps random rectangular feature patches between batch samples with probability $p=0.5$:
    $$\widetilde{Z} = M_{\text{feat}} \odot Z_i + (1 - M_{\text{feat}}) \odot Z_j$$
+4. **Feature Horizontal Flip:** Horizontally flips 2D feature maps with probability $p=0.5$.
 
-Applying these operations produces four distinct representations for every unlabeled video:
+> **Implementation Observation — Spatial Feature Flip & Spatial Pooling**:  
+> The current implementation applies TAP followed by spatial aggregation in the auxiliary head ($C_{TAP}$ applies `AdaptiveAvgPool2d((1,1))`), which may substantially reduce or eliminate the effect of spatial feature flipping. Because global spatial summation across $(H, W)$ is mathematically invariant to spatial reflection along an axis, feature horizontal flipping produces mathematically identical pooled representations when no spatially sensitive operations intervene before pooling. This is noted as an implementation observation rather than a paper-level conclusion.
+
+Applying these operations yields four representations for each unlabeled clip:
 * $Z_w$: Frame-weak feature (unperturbed)
-* $Z_s$: Frame-strong feature
-* $Z_{w_p}$: Frame-weak feature with feature perturbation
-* $Z_{s_p}$: Frame-strong feature with feature perturbation
+* $Z_s$: Frame-strong feature (unperturbed at feature stage)
+* $Z_{w_p}$: Frame-weak feature perturbed via P-Aug
+* $Z_{s_p}$: Frame-strong feature perturbed via P-Aug
 
 ---
 
-### 3.3 Multihead Pseudo-Labeling (MPL) & Decoupled Heads
+### 3.3 Decoupled Classification Heads & Pseudo-Label Generation
 
-To prevent self-reinforcing weight collapse, $F^2$-FixMatch decouples the classifier into:
-* **3D Spatio-Temporal Head ($C_{3D}$):** `AdaptiveAvgPool3d((1,1,1)) -> Linear(512, 101)`. Evaluates $Z_w$ and $Z_s$.
-* **TAP 2D Head ($C_{TAP}$):** `AdaptiveAvgPool2d((1,1)) -> Linear(512, 101)`. Evaluates $Z_{w_p}$ and $Z_{s_p}$.
+To decouple spatio-temporal dynamics from frame-collapsed features, $F^2$-FixMatch employs two distinct classifier heads:
+* **3D Spatio-Temporal Head ($C_{3D}$):** `AdaptiveAvgPool3d((1,1,1)) -> Dropout(0.5) -> Linear(512, 101)`. Evaluates $Z_w$ and $Z_s$.
+* **TAP 2D Head ($C_{TAP}$):** `AdaptiveAvgPool2d((1,1)) -> Dropout(0.5) -> Linear(512, 101)`. Evaluates $Z_{w_p}$ and $Z_{s_p}$.
 
-#### Pseudo-Label Generation
-The pseudo-label $\hat{y}$ is generated **exclusively** from the weakly augmented RGB and TG views through the 3D head:
-$$p_w = \operatorname{softmax}\left(C_{3D}(Z_w)\right)$$
+#### Dual-Stream Pseudo-Labeling
+Pseudo-labels are generated by ensembling the weakly augmented RGB and TG predictions through the 3D head:
+$$p_w = \frac{1}{2} \left( \operatorname{softmax}\left(C_{3D}(Z_w^{\text{RGB}})\right) + \operatorname{softmax}\left(C_{3D}(Z_w^{\text{TG}})\right) \right)$$
 $$\hat{y} = \arg\max_c p_w(c), \qquad q = \max_c p_w(c)$$
-
-The confidence mask selects samples meeting threshold $\tau = 0.3$:
-$$m = \mathbb{1}[q \geq \tau]$$
-
-> **Design Rationale**: Feature-perturbed views ($Z_{w_p}, Z_{s_p}$) are evaluated exclusively by $C_{TAP}$ and are **never** used to generate pseudo-labels. This strict structural firewall guarantees that aggressive feature corruptions cannot poison the pseudo-label generator.
+$$m = \mathbb{1}[q \geq \tau] \quad (\tau = 0.3)$$
 
 ---
 
-### 3.4 Multi-Task Objective Function
+### 3.4 Multi-Task Objective Function & $Z_w$ Detachment
 
-The joint loss across labeled batch $\mathcal{B}_l$ and unlabeled batch $\mathcal{B}_u$ is defined as:
-$$\mathcal{L} = \mathcal{L}_s + \alpha \mathcal{L}_u^s + \beta \mathcal{L}_u^{w_p} + \gamma \mathcal{L}_u^{s_p}$$
+The joint optimization objective is:
+$$\mathcal{L} = \mathcal{L}_s + \lambda_{\text{ramp}}(t) \cdot \left( \alpha \mathcal{L}_u^s + \beta \mathcal{L}_u^{w_p} + \gamma \mathcal{L}_u^{s_p} \right)$$
 
 1. **Supervised Loss ($\mathcal{L}_s$):**
    $$\mathcal{L}_s = \frac{1}{|\mathcal{B}_l|} \sum_{i \in \mathcal{B}_l} \text{CE}\left(C_{3D}(E(x_i)), y_i\right)$$
 
 2. **Frame-Level Strong Consistency Loss ($\mathcal{L}_u^s$):**
-   Supervises the frame-strongly augmented view through the 3D head:
-   $$\mathcal{L}_u^s = \frac{1}{|\mathcal{B}_u|} \sum_{j \in \mathcal{B}_u} m_j \cdot \text{CE}\left(C_{3D}(Z_{s, j}), \hat{y}_j\right)$$
+   $$\mathcal{L}_u^s = \frac{1}{|\mathcal{B}_u|} \sum_{j \in \mathcal{B}_u} m_j \cdot \frac{1}{2} \left[ \text{CE}\left(C_{3D}(Z_{s, j}^{\text{RGB}}), \hat{y}_j\right) + \text{CE}\left(C_{3D}(Z_{s, j}^{\text{TG}}), \hat{y}_j\right) \right]$$
 
-3. **Feature-Perturbed Weak TAP Loss ($\mathcal{L}_u^{w_p}$):**
-   Supervises the weakly augmented feature-perturbed view through the TAP head:
-   $$\mathcal{L}_u^{w_p} = \frac{1}{|\mathcal{B}_u|} \sum_{j \in \mathcal{B}_u} m_j \cdot \text{CE}\left(C_{TAP}(Z_{w_p, j}), \hat{y}_j\right)$$
+3. **Weak Feature-Level Consistency Loss ($\mathcal{L}_u^{w_p}$):**
+   Supervises perturbed weak features through the TAP head $C_{TAP}$:
+   $$\mathcal{L}_u^{w_p} = \frac{1}{|\mathcal{B}_u|} \sum_{j \in \mathcal{B}_u} m_j \cdot \frac{1}{2} \left[ \text{CE}\left(C_{TAP}(Z_{w_p, j}^{\text{RGB}}), \hat{y}_j\right) + \text{CE}\left(C_{TAP}(Z_{w_p, j}^{\text{TG}}), \hat{y}_j\right) \right]$$
 
-4. **Feature-Perturbed Strong TAP Loss ($\mathcal{L}_u^{s_p}$):**
-   Supervises the strongly augmented feature-perturbed view through the TAP head:
-   $$\mathcal{L}_u^{s_p} = \frac{1}{|\mathcal{B}_u|} \sum_{j \in \mathcal{B}_u} m_j \cdot \text{CE}\left(C_{TAP}(Z_{s_p, j}), \hat{y}_j\right)$$
+4. **Strong Feature-Level Consistency Loss ($\mathcal{L}_u^{s_p}$):**
+   Supervises perturbed strong features through the TAP head $C_{TAP}$:
+   $$\mathcal{L}_u^{s_p} = \frac{1}{|\mathcal{B}_u|} \sum_{j \in \mathcal{B}_u} m_j \cdot \frac{1}{2} \left[ \text{CE}\left(C_{TAP}(Z_{s_p, j}^{\text{RGB}}), \hat{y}_j\right) + \text{CE}\left(C_{TAP}(Z_{s_p, j}^{\text{TG}}), \hat{y}_j\right) \right]$$
 
-Hyperparameters follow the official paper specification: $\alpha = 2.0$, $\beta = 2.0$, $\gamma = 1.0$, and $\tau = 0.3$.
+> **Implementation Choice — $Z_w$ Feature Detach**:  
+> In `train_f2_fixmatch.py`, the weak latent representation is detached prior to P-Aug:
+> `_, logits_wp = model.forward_paug(z_w.detach())`.  
+> The weak feature branch is detached in the current implementation, so its consistency loss ($\mathcal{L}_u^{w_p}$) does not backpropagate through the weak backbone features. This directs gradients from $\mathcal{L}_u^{w_p}$ exclusively into the TAP classification head ($C_{TAP}$) rather than into the backbone encoder. This is an implementation choice and is documented as such, rather than an empirically proven claim of mode collapse prevention. Backbone gradient updates from unlabeled data are maintained through the strongly augmented student pathways ($Z_s$ and $Z_{s_p}$).
+
+Hyperparameters follow official specifications: $\alpha = 2.0$, $\beta = 2.0$, $\gamma = 1.0$, and $\tau = 0.3$.
 
 ---
 
@@ -170,13 +162,14 @@ Training is partitioned into three distinct phases across 220 epochs:
 
 1. **Supervised Warmup (Epochs 1–40):**
    * Unsupervised weights set to zero: $\alpha = 0, \beta = 0, \gamma = 0$.
-   * Backbone and $C_{3D}$ head train strictly on the 10% labeled data ($L_s$).
-   * Enables the encoder to learn stable preliminary class cluster centers.
+   * Backbone and $C_{3D}$ head train strictly on the 10% labeled data ($\mathcal{L}_s$).
+   * Enables the encoder to learn stable preliminary class cluster centers before unlabeled pseudo-labeling begins.
 2. **Progressive Ramp-Up (Epochs 41–70):**
-   * Unsupervised loss weights scale linearly from 0.0 to their full values ($\alpha \to 2.0$, $\beta \to 2.0$, $\gamma \to 1.0$).
-   * Pseudo-label mask coverage expands smoothly from 13.6% to 75.2% without shocking BatchNorm statistics.
+   * Unsupervised loss weight $\lambda_{\text{ramp}}(t) = (t - 40) / 30$ scales linearly from 0.0 to 1.0.
+   * Pseudo-label mask coverage expands smoothly from 13.6% to 75.2%.
+   * Detached $Z_w$ ensures weak branch consistency updates the TAP head directly without updating weak backbone features.
 3. **Joint Semi-Supervised Convergence (Epochs 71–220):**
-   * All four loss terms operate at full weight.
+   * All loss terms operate at full weight ($\lambda_{\text{ramp}} = 1.0$).
    * Cosine annealing learning rate schedule decays $\eta$ from 0.2 down to $10^{-4}$.
 
 ---
