@@ -104,9 +104,13 @@ class UCF101FullTestDataset(Dataset):
         self.crop_size = crop_size
         self.eval_mode = eval_mode
         self.samples = []
+        self.corruption_count = 0
+        self.failed_videos = []
         self._load_split()
 
     def _load_split(self):
+        missing_count = 0
+        missing_examples = []
         with open(self.split_file, 'r') as f:
             for line in f:
                 parts = line.strip().split()
@@ -123,17 +127,38 @@ class UCF101FullTestDataset(Dataset):
                     os.path.join(self.data_root, rel_path + '.avi'),
                     os.path.join(self.data_root, rel_path),
                 ]
-                full_path = candidates[0]
+                full_path = None
                 for cand in candidates:
                     if os.path.exists(cand):
                         full_path = cand
                         break
+
+                if full_path is None:
+                    missing_count += 1
+                    if len(missing_examples) < 5:
+                        missing_examples.append(candidates[0])
+                    full_path = candidates[0]
 
                 self.samples.append({
                     'path': full_path,
                     'total_frames': total_frames,
                     'label': label
                 })
+
+        if missing_count > 0:
+            print(
+                f"\n[Fatal Error] Dataset integrity check failed: {missing_count}/{len(self.samples)} "
+                f"evaluation videos are missing from '{self.data_root}'.",
+                file=sys.stderr,
+                flush=True
+            )
+            print("First missing video paths:", file=sys.stderr, flush=True)
+            for p in missing_examples:
+                print(f"  - {p}", file=sys.stderr, flush=True)
+            raise FileNotFoundError(
+                f"{missing_count}/{len(self.samples)} evaluation videos are missing under '{self.data_root}'. "
+                f"Please ensure UCF-101 videos are downloaded or extracted before evaluation."
+            )
 
     def __len__(self):
         return len(self.samples)
@@ -172,9 +197,16 @@ class UCF101FullTestDataset(Dataset):
             tensors = torch.stack(all_crops, dim=0)  # (30, 3, 8, crop_size, crop_size)
             return tensors, label
         except Exception as e:
-            print(f"[Warning] Error loading evaluation video '{video_path}': {e}. Resampling fallback sample.", flush=True)
-            fallback_idx = (index + 1) % len(self.samples)
-            return self.__getitem__(fallback_idx)
+            self.corruption_count += 1
+            self.failed_videos.append({"index": index, "path": video_path, "error": str(e)})
+            error_msg = (
+                f"\n[Fatal Evaluation Error] Unreadable evaluation video '{video_path}' at index {index}: {e}.\n"
+                f"Total corruption count: {self.corruption_count}.\n"
+                f"Fail-stop policy enforced: immediately halting evaluation with an explicit error. "
+                f"Silently skipping or substituting videos with fallback samples is prohibited."
+            )
+            print(error_msg, file=sys.stderr, flush=True)
+            raise RuntimeError(error_msg) from e
 
 
 def main():

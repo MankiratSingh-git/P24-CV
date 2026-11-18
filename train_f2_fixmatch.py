@@ -3,6 +3,8 @@ os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 import sys
 import argparse
+import json
+import subprocess
 import time
 import math
 import torch
@@ -15,7 +17,45 @@ from dataset import UCF101Dataset
 from mmaction.core.random_seed import set_random_seed, get_rng_states, set_rng_states, load_checkpoint, safe_load_optimizer_state
 
 
-def parse_args():
+def get_git_commit_hash():
+    """Retrieve git commit hash for canonical reproducibility."""
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_dir,
+            stderr=subprocess.DEVNULL
+        ).decode("ascii").strip()
+        return commit
+    except Exception:
+        try:
+            git_dir = os.path.join(repo_dir, ".git")
+            head_file = os.path.join(git_dir, "HEAD")
+            if os.path.exists(head_file):
+                with open(head_file, "r") as f:
+                    ref = f.read().strip()
+                if ref.startswith("ref:"):
+                    ref_part = ref.split(":", 1)[1].strip()
+                    ref_path = os.path.join(git_dir, *ref_part.split("/"))
+                    if os.path.exists(ref_path):
+                        with open(ref_path, "r") as f:
+                            return f.read().strip()
+                    packed_file = os.path.join(git_dir, "packed-refs")
+                    if os.path.exists(packed_file):
+                        with open(packed_file, "r") as pf:
+                            for pline in pf:
+                                pline = pline.strip()
+                                if pline and not pline.startswith("#") and not pline.startswith("^"):
+                                    parts = pline.split()
+                                    if len(parts) == 2 and parts[1] == ref_part:
+                                        return parts[0]
+                return ref
+        except Exception:
+            pass
+        return "unknown"
+
+
+def parse_args(args=None):
     parser = argparse.ArgumentParser(description="F2-FixMatch Training on UCF-101 (10% Labeled Data)")
     parser.add_argument("--data-root", type=str, default="data/ucf101", help="Path to UCF-101 dataset")
     parser.add_argument("--splits-dir", type=str, default="data/splits", help="Path to split annotation files")
@@ -23,7 +63,7 @@ def parse_args():
     parser.add_argument("--split", type=int, default=1, choices=[1, 2, 3], help="Official UCF-101 split")
 
     # Hyperparameters from Section 4.2 & 4.5
-    parser.add_argument("--epochs", type=int, default=220, help="Total training epochs (220 for 10% subset)")
+    parser.add_argument("--epochs", type=int, default=220, help="Total training epochs (220 for 10%% subset)")
     parser.add_argument("--warmup-epochs", type=int, default=40, help="Warmup epochs with only labeled data")
     parser.add_argument("--batch-size", "--batch-size-labeled", type=int, default=4, dest="batch_size", help="Labeled batch size B_l per GPU")
     parser.add_argument("--batch-size-unlabeled", type=int, default=None, help="Explicit unlabeled batch size B_u (overrides --mu if set)")
@@ -47,7 +87,23 @@ def parse_args():
     parser.add_argument("--output-dir", type=str, default="checkpoints/f2_fixmatch")
     parser.add_argument("--eval-freq", type=int, default=5, help="Validation evaluation frequency (epochs)")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from")
-    return parser.parse_args()
+
+    parsed_args = parser.parse_args(args)
+    if parsed_args.alpha < 0.0:
+        parser.error("--alpha must be non-negative (>= 0.0)")
+    if parsed_args.beta < 0.0:
+        parser.error("--beta must be non-negative (>= 0.0)")
+    if parsed_args.gamma < 0.0:
+        parser.error("--gamma must be non-negative (>= 0.0)")
+    if not (0.0 <= parsed_args.threshold <= 1.0):
+        parser.error("--threshold must be between 0.0 and 1.0")
+    if parsed_args.lr <= 0.0:
+        parser.error("--lr must be positive (> 0.0)")
+    if parsed_args.batch_size < 1:
+        parser.error("--batch-size must be at least 1")
+    if parsed_args.accum_steps < 1:
+        parser.error("--accum-steps must be at least 1")
+    return parsed_args
 
 
 def adjust_learning_rate(optimizer, epoch, total_epochs, warmup_epochs, base_lr):
@@ -91,20 +147,166 @@ def evaluate(model, val_loader, device):
     return top1_acc, top5_acc
 
 
+def train_step(
+    model,
+    labeled_batch,
+    unlabeled_batch=None,
+    ce_loss_fn=None,
+    alpha=2.0,
+    beta=2.0,
+    gamma=1.0,
+    threshold=0.3,
+    is_warmup=False,
+    rampup_weight=1.0,
+    device=None,
+):
+    """
+    Executes a single forward pass and computes the multi-task loss for F2-FixMatch.
+
+    Guards feature-level perturbation passes:
+    - If beta > 0: computes logits_wp and loss_u_wp. Otherwise sets loss_u_wp = torch.tensor(0.0, device=device).
+    - If gamma > 0: computes logits_sp and loss_u_sp. Otherwise sets loss_u_sp = torch.tensor(0.0, device=device).
+    """
+    if device is None:
+        device = next(model.parameters()).device
+    if ce_loss_fn is None:
+        ce_loss_fn = nn.CrossEntropyLoss()
+
+    rgb_l, tg_l, targets_l = labeled_batch
+    rgb_l = rgb_l.to(device, non_blocking=True)
+    tg_l = tg_l.to(device, non_blocking=True)
+    targets_l = targets_l.to(device, non_blocking=True)
+
+    # 1. Supervised Loss (L_s) on Labeled RGB and Temporal Gradient
+    feat_rgb_l = model.forward_backbone(rgb_l)
+    logits_rgb_l = model.forward_logits(feat_rgb_l)
+
+    feat_tg_l = model.forward_backbone(tg_l)
+    logits_tg_l = model.forward_logits(feat_tg_l)
+
+    loss_s_rgb = ce_loss_fn(logits_rgb_l, targets_l)
+    loss_s_tg = ce_loss_fn(logits_tg_l, targets_l)
+    loss_s = loss_s_rgb + loss_s_tg  # Equation 13: L_s = L_s^V + L_s^G (exact sum, not average)
+    total_loss = loss_s
+
+    loss_u_s_val = 0.0
+    loss_u_wp_val = 0.0
+    loss_u_sp_val = 0.0
+    num_select = 0
+    bz_u = 0
+
+    # 2. Unsupervised P-Aug + MPL Loss (After Warmup)
+    if not is_warmup and unlabeled_batch is not None:
+        rgb_w, rgb_s, tg_w, tg_s = unlabeled_batch
+        rgb_w = rgb_w.to(device, non_blocking=True)
+        rgb_s = rgb_s.to(device, non_blocking=True)
+        tg_w = tg_w.to(device, non_blocking=True)
+        tg_s = tg_s.to(device, non_blocking=True)
+        bz_u = rgb_w.size(0)
+
+        # Extract features for weakly augmented RGB and TG under torch.no_grad()
+        # Weak views act strictly as the teacher (pseudo-label generator).
+        # Detaching Z_w is an implementation choice ensuring the weak branch acts as a fixed reference.
+        with torch.no_grad():
+            z_w_rgb = model.forward_backbone(rgb_w)
+            logits_w_rgb = model.forward_logits(z_w_rgb)
+
+            z_w_tg = model.forward_backbone(tg_w)
+            logits_w_tg = model.forward_logits(z_w_tg)
+
+            # Multihead Pseudo-Labeling (MPL) aggregation: targets are detached
+            p_w_rgb = F.softmax(logits_w_rgb, dim=-1)
+            p_w_tg = F.softmax(logits_w_tg, dim=-1)
+            p_w_agg = 0.5 * (p_w_rgb + p_w_tg)
+            max_probs, pseudo_labels = torch.max(p_w_agg, dim=-1)
+            confident_mask = (max_probs >= threshold)
+            num_select = confident_mask.sum().item()
+
+        if num_select > 0:
+            conf_idx = confident_mask.nonzero(as_tuple=False).squeeze(1)
+            conf_labels = pseudo_labels[conf_idx]
+
+            # --- Frame-level Strong Augmentation features Z_s ---
+            # Strongly augmented views act as the student; gradients flow to backbone
+            z_s_rgb = model.forward_backbone(rgb_s)
+            logits_s_rgb = model.forward_logits(z_s_rgb)
+
+            z_s_tg = model.forward_backbone(tg_s)
+            logits_s_tg = model.forward_logits(z_s_tg)
+
+            loss_u_s_rgb = F.cross_entropy(logits_s_rgb[conf_idx], conf_labels, reduction='sum')
+            loss_u_s_tg = F.cross_entropy(logits_s_tg[conf_idx], conf_labels, reduction='sum')
+            loss_u_s = (loss_u_s_rgb + loss_u_s_tg) / (2.0 * float(bz_u))
+
+            # --- P-Aug: Feature-level perturbation on Z_w and Z_s ---
+            # Z_{w_p}: frame weak, feature perturbed.
+            # z_w is detached in this implementation so gradients from L_u^{w_p} update the TAP classification head
+            # rather than backpropagating into the weak backbone; this is an implementation choice.
+            if beta > 0:
+                _, logits_wp_rgb = model.forward_paug(z_w_rgb.detach())
+                _, logits_wp_tg = model.forward_paug(z_w_tg.detach())
+
+                loss_u_wp_rgb = F.cross_entropy(logits_wp_rgb[conf_idx], conf_labels, reduction='sum')
+                loss_u_wp_tg = F.cross_entropy(logits_wp_tg[conf_idx], conf_labels, reduction='sum')
+                loss_u_wp = (loss_u_wp_rgb + loss_u_wp_tg) / (2.0 * float(bz_u))
+            else:
+                loss_u_wp = torch.tensor(0.0, device=device)
+
+            # Z_{s_p}: frame strong, feature perturbed (gradients flow through z_s to backbone)
+            if gamma > 0:
+                _, logits_sp_rgb = model.forward_paug(z_s_rgb)
+                _, logits_sp_tg = model.forward_paug(z_s_tg)
+
+                loss_u_sp_rgb = F.cross_entropy(logits_sp_rgb[conf_idx], conf_labels, reduction='sum')
+                loss_u_sp_tg = F.cross_entropy(logits_sp_tg[conf_idx], conf_labels, reduction='sum')
+                loss_u_sp = (loss_u_sp_rgb + loss_u_sp_tg) / (2.0 * float(bz_u))
+            else:
+                loss_u_sp = torch.tensor(0.0, device=device)
+
+            # Total Loss: L = L_s + rampup * (alpha * L_u^s + beta * L_u^{w_p} + gamma * L_u^{s_p})
+            total_loss = (
+                total_loss +
+                rampup_weight * (
+                    alpha * loss_u_s +
+                    beta * loss_u_wp +
+                    gamma * loss_u_sp
+                )
+            )
+
+            loss_u_s_val = loss_u_s.item()
+            loss_u_wp_val = loss_u_wp.item()
+            loss_u_sp_val = loss_u_sp.item()
+
+    return total_loss, loss_s.item(), loss_u_s_val, loss_u_wp_val, loss_u_sp_val, num_select, bz_u
+
+
 def main():
     args = parse_args()
     set_random_seed(args.seed)
     os.makedirs(args.output_dir, exist_ok=True)
     device = torch.device(args.device)
+    git_commit = get_git_commit_hash()
 
     print("=" * 65)
     print("F2-FixMatch: Frame- and Feature-level Progressive Augmentation")
+    print(f"Git Commit: {git_commit} | Seed: {args.seed}")
     print(f"Backbone: 3D-ResNet-18 | Device: {device}")
     print(f"Dataset: UCF-101 ({args.labeled_percent}% labeled) | Split: {args.split}")
     unlabeled_bs = args.batch_size_unlabeled if args.batch_size_unlabeled is not None else args.batch_size * args.mu
-    print(f"Batch Size: B_l={args.batch_size}, B_u={unlabeled_bs}")
+    print(f"Batch Size: B_l={args.batch_size}, B_u={unlabeled_bs} | Accum Steps: {args.accum_steps}")
     print(f"Loss Weights: alpha={args.alpha}, beta={args.beta}, gamma={args.gamma} | Tau: {args.threshold} | Rampup: {args.rampup_epochs} epochs")
     print("=" * 65)
+
+    # Save canonical run configuration (command-line arguments, git commit, seed, timestamp)
+    run_config = {
+        "git_commit": git_commit,
+        "seed": args.seed,
+        "command_line": " ".join(sys.argv),
+        "args": vars(args),
+        "start_time": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+    with open(os.path.join(args.output_dir, "run_config.json"), "w") as f:
+        json.dump(run_config, f, indent=2)
 
     # Dataset filepaths
     labeled_split = os.path.join(
@@ -198,7 +400,14 @@ def main():
         model.train()
         current_lr = adjust_learning_rate(optimizer, epoch, args.epochs, args.warmup_epochs, args.lr)
 
-        unlabeled_iter = iter(unlabeled_loader)
+        rampup_weight = 0.0
+        if epoch >= args.warmup_epochs:
+            unlabeled_iter = iter(unlabeled_loader)
+            if args.rampup_epochs > 0:
+                rampup_weight = min(1.0, float(epoch - args.warmup_epochs + 1) / float(args.rampup_epochs))
+            else:
+                rampup_weight = 1.0
+
         running_loss_s = 0.0
         running_loss_u_s = 0.0
         running_loss_u_wp = 0.0
@@ -208,123 +417,32 @@ def main():
         num_batches = 0
         optimizer.zero_grad()
 
-        for batch_idx, (rgb_l, tg_l, targets_l) in enumerate(labeled_loader):
-            rgb_l = rgb_l.to(device, non_blocking=True)
-            tg_l = tg_l.to(device, non_blocking=True)
-            targets_l = targets_l.to(device, non_blocking=True)
-            bz_l = rgb_l.size(0)
-
-            # -------------------------------------------------------------
-            # 1. Supervised Loss L_s (RGB and TG modalities)
-            # -------------------------------------------------------------
-            feat_rgb_l = model.forward_backbone(rgb_l)
-            logits_rgb_l = model.forward_logits(feat_rgb_l)
-
-            feat_tg_l = model.forward_backbone(tg_l)
-            logits_tg_l = model.forward_logits(feat_tg_l)
-
-            loss_s_rgb = ce_loss_fn(logits_rgb_l, targets_l)
-            loss_s_tg = ce_loss_fn(logits_tg_l, targets_l)
-            loss_s = loss_s_rgb + loss_s_tg  # Equation 13: L_s = L_s^V + L_s^G (exact sum, not average)
-            total_loss = loss_s
-
-            loss_u_s_val = 0.0
-            loss_u_wp_val = 0.0
-            loss_u_sp_val = 0.0
-
-            # -------------------------------------------------------------
-            # 2. Unsupervised P-Aug + MPL Loss (After Warmup)
-            # -------------------------------------------------------------
-            rampup_weight = 0.0
+        for batch_idx, labeled_batch in enumerate(labeled_loader):
             if epoch >= args.warmup_epochs:
                 try:
                     unlabeled_batch = next(unlabeled_iter)
                 except StopIteration:
                     unlabeled_iter = iter(unlabeled_loader)
                     unlabeled_batch = next(unlabeled_iter)
+            else:
+                unlabeled_batch = None
 
-                rgb_w, rgb_s, tg_w, tg_s = unlabeled_batch
-                rgb_w = rgb_w.to(device, non_blocking=True)
-                rgb_s = rgb_s.to(device, non_blocking=True)
-                tg_w = tg_w.to(device, non_blocking=True)
-                tg_s = tg_s.to(device, non_blocking=True)
-                bz_u = rgb_w.size(0)
+            total_loss, loss_s_val, loss_u_s_val, loss_u_wp_val, loss_u_sp_val, num_select, bz_u = train_step(
+                model=model,
+                labeled_batch=labeled_batch,
+                unlabeled_batch=unlabeled_batch,
+                ce_loss_fn=ce_loss_fn,
+                alpha=args.alpha,
+                beta=args.beta,
+                gamma=args.gamma,
+                threshold=args.threshold,
+                is_warmup=(epoch < args.warmup_epochs),
+                rampup_weight=rampup_weight,
+                device=device,
+            )
 
-                # Linear ramp-up weight after warmup
-                if args.rampup_epochs > 0:
-                    rampup_weight = min(1.0, float(epoch - args.warmup_epochs + 1) / float(args.rampup_epochs))
-                else:
-                    rampup_weight = 1.0
-
-                # Extract features for weakly augmented RGB and TG under torch.no_grad()
-                # Weak views act strictly as the teacher (pseudo-label generator).
-                # Detaching Z_w prevents mode collapse and circular gradient feedback.
-                with torch.no_grad():
-                    z_w_rgb = model.forward_backbone(rgb_w)
-                    logits_w_rgb = model.forward_logits(z_w_rgb)
-
-                    z_w_tg = model.forward_backbone(tg_w)
-                    logits_w_tg = model.forward_logits(z_w_tg)
-
-                    # Multihead Pseudo-Labeling (MPL) aggregation: targets are detached
-                    p_w_rgb = F.softmax(logits_w_rgb, dim=-1)
-                    p_w_tg = F.softmax(logits_w_tg, dim=-1)
-                    p_w_agg = 0.5 * (p_w_rgb + p_w_tg)
-                    max_probs, pseudo_labels = torch.max(p_w_agg, dim=-1)
-                    confident_mask = (max_probs >= args.threshold)
-                    num_select = confident_mask.sum().item()
-
-                if num_select > 0:
-                    conf_idx = confident_mask.nonzero(as_tuple=False).squeeze(1)
-                    conf_labels = pseudo_labels[conf_idx]
-
-                    # --- Frame-level Strong Augmentation features Z_s ---
-                    # Strongly augmented views act as the student; gradients flow to backbone
-                    z_s_rgb = model.forward_backbone(rgb_s)
-                    logits_s_rgb = model.forward_logits(z_s_rgb)
-
-                    z_s_tg = model.forward_backbone(tg_s)
-                    logits_s_tg = model.forward_logits(z_s_tg)
-
-                    loss_u_s_rgb = F.cross_entropy(logits_s_rgb[conf_idx], conf_labels, reduction='sum')
-                    loss_u_s_tg = F.cross_entropy(logits_s_tg[conf_idx], conf_labels, reduction='sum')
-                    loss_u_s = (loss_u_s_rgb + loss_u_s_tg) / (2.0 * float(bz_u))
-
-                    # --- P-Aug: Feature-level perturbation on Z_w and Z_s ---
-                    # Z_{w_p}: frame weak, feature perturbed.
-                    # z_w is detached to prevent self-training collapse into trivial representations;
-                    # gradients flow into the TAP classification head.
-                    _, logits_wp_rgb = model.forward_paug(z_w_rgb.detach())
-                    _, logits_wp_tg = model.forward_paug(z_w_tg.detach())
-
-                    loss_u_wp_rgb = F.cross_entropy(logits_wp_rgb[conf_idx], conf_labels, reduction='sum')
-                    loss_u_wp_tg = F.cross_entropy(logits_wp_tg[conf_idx], conf_labels, reduction='sum')
-                    loss_u_wp = (loss_u_wp_rgb + loss_u_wp_tg) / (2.0 * float(bz_u))
-
-                    # Z_{s_p}: frame strong, feature perturbed (gradients flow through z_s to backbone)
-                    _, logits_sp_rgb = model.forward_paug(z_s_rgb)
-                    _, logits_sp_tg = model.forward_paug(z_s_tg)
-
-                    loss_u_sp_rgb = F.cross_entropy(logits_sp_rgb[conf_idx], conf_labels, reduction='sum')
-                    loss_u_sp_tg = F.cross_entropy(logits_sp_tg[conf_idx], conf_labels, reduction='sum')
-                    loss_u_sp = (loss_u_sp_rgb + loss_u_sp_tg) / (2.0 * float(bz_u))
-
-                    # Total Loss: L = L_s + rampup * (alpha * L_u^s + beta * L_u^{w_p} + gamma * L_u^{s_p})
-                    total_loss = (
-                        total_loss + 
-                        rampup_weight * (
-                            args.alpha * loss_u_s + 
-                            args.beta * loss_u_wp + 
-                            args.gamma * loss_u_sp
-                        )
-                    )
-
-                    loss_u_s_val = loss_u_s.item()
-                    loss_u_wp_val = loss_u_wp.item()
-                    loss_u_sp_val = loss_u_sp.item()
-                    total_confident_samples += num_select
-
-                total_unlabeled_samples += bz_u
+            total_confident_samples += num_select
+            total_unlabeled_samples += bz_u
 
             # Gradient accumulation: properly scale even if dataset size is not divisible
             steps_in_window = min(
@@ -338,7 +456,7 @@ def main():
                 optimizer.step()
                 optimizer.zero_grad()
 
-            running_loss_s += loss_s.item()
+            running_loss_s += loss_s_val
             running_loss_u_s += loss_u_s_val
             running_loss_u_wp += loss_u_wp_val
             running_loss_u_sp += loss_u_sp_val
@@ -373,7 +491,11 @@ def main():
                     'optimizer_state_dict': optimizer.state_dict(),
                     'val_top1': val_top1,
                     'val_top5': val_top5,
+                    'best_val_top1': best_val_top1,
                     'rng_state': get_rng_states(),
+                    'seed': args.seed,
+                    'git_commit': git_commit,
+                    'args': vars(args),
                 }, os.path.join(args.output_dir, "best_model.pth"))
 
             print(
@@ -396,7 +518,6 @@ def main():
             })
 
             # Save training metrics history JSON
-            import json
             with open(os.path.join(args.output_dir, "training_history.json"), "w") as f:
                 json.dump(history, f, indent=2)
 
@@ -407,6 +528,9 @@ def main():
             'optimizer_state_dict': optimizer.state_dict(),
             'best_val_top1': best_val_top1,
             'rng_state': get_rng_states(),
+            'seed': args.seed,
+            'git_commit': git_commit,
+            'args': vars(args),
         }, os.path.join(args.output_dir, "latest_checkpoint.pth"))
 
         if (epoch + 1) == args.epochs:
@@ -416,13 +540,19 @@ def main():
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_val_top1': best_val_top1,
                 'rng_state': get_rng_states(),
+                'seed': args.seed,
+                'git_commit': git_commit,
+                'args': vars(args),
             }, os.path.join(args.output_dir, "final_model.pth"))
 
     elapsed = time.time() - start_time
-    import json
     summary = {
         "model": "F2-FixMatch (Bi-modal RGB + TG, P-Aug, MPL)",
-        "dataset": "UCF-101 Split 1 (10% Labeled)",
+        "dataset": f"UCF-101 Split {args.split} ({args.labeled_percent}% Labeled)",
+        "git_commit": git_commit,
+        "seed": args.seed,
+        "command_line": " ".join(sys.argv),
+        "args": vars(args),
         "best_epoch": max(history, key=lambda x: x["val_top1"])["epoch"] if history else args.epochs,
         "best_val_top1": round(best_val_top1, 2),
         "total_training_hours": round(elapsed / 3600.0, 2),

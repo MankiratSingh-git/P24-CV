@@ -127,6 +127,10 @@ class F2FixMatchModel(nn.Module):
         """Evaluation forward pass (RGB only)."""
         return self.backbone(x)
 
+    def forward(self, x):
+        """Standard forward pass delegating to forward_eval for standard PyTorch interface."""
+        return self.forward_eval(x)
+
     def load_state_dict(self, state_dict, strict=True):
         """Handle backward compatibility when loading checkpoints without fc_tap."""
         if 'backbone.fc_tap.weight' not in state_dict and 'backbone.fc.weight' in state_dict:

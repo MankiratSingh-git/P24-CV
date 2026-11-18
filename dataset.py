@@ -1,6 +1,7 @@
 import os
 os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
+import sys
 import glob
 import random
 import numpy as np
@@ -215,7 +216,16 @@ class UCF101Dataset(Dataset):
             else:
                 raw_tg = None
         except Exception as e:
-            # If an individual video fails to decode, log warning and resample another video to avoid aborting training
+            if not self.is_train:
+                error_msg = (
+                    f"\n[Fatal Validation Error] Unreadable validation video '{video_path}' at index {index}: {e}.\n"
+                    f"Fail-stop policy enforced: immediately halting evaluation. "
+                    f"Silently skipping or substituting videos with fallback samples is prohibited."
+                )
+                print(error_msg, file=sys.stderr, flush=True)
+                raise RuntimeError(error_msg) from e
+
+            # If an individual video fails to decode during training, log warning and resample another video to avoid aborting training
             print(f"[Warning] Error loading video '{video_path}': {e}. Resampling fallback sample.", flush=True)
             fallback_idx = random.randint(0, len(self.samples) - 1)
             return self.__getitem__(fallback_idx)
