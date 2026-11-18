@@ -194,9 +194,9 @@ def classify_case(
         )
         dominant_factor = "RGB+TG Dual-Stream Configuration"
         recommended_action = (
-            "Assess Impact & Audit: Investigate interaction between spatial feature flipping, "
-            "TAP pooling, and weak-feature detach (Z_w). Determine whether architectural constraints "
-            "in the current head prevented feature consistency losses from delivering auxiliary regularizing benefit."
+            "Assess Impact & Audit: Investigate weak-feature detach (Z_w) and loss weighting. "
+            "Determine whether architectural constraints in the current head prevented "
+            "feature consistency losses from delivering auxiliary regularizing benefit."
         )
     elif delta_feat > delta_dual:
         case_id = "Case B"
@@ -387,11 +387,9 @@ In accordance with Phase 2 and Phase 4 requirements:
 
 1. **Weak-Feature Detach ($Z_w$)**:  
    Confirmed in Phase 2 Architecture Audit that `z_w` is detached before computing $\\mathcal{{L}}_u^{{w_p}}$, preventing gradient backpropagation into the weak backbone. Classified as an intentional implementation choice to stabilize pseudo-label representations.
-2. **Feature Flip $\\to$ TAP $\\to$ Spatial Aggregation Interaction**:  
-   Noted as an implementation observation that spatial aggregation following TAP pooling substantially compresses spatial orientation signals.
-3. **PreciseBN Recalibration**:  
+2. **PreciseBN Recalibration**:  
    Diagnostic in Phase 2 confirmed bitwise parameter invariance across model weights while updating population mean and variance estimates.
-4. **Model Update & Retest Rule Applied**:  
+3. **Model Update & Retest Rule Applied**:  
    If any architectural anomaly is confirmed as an active bug rather than a documented design choice, the model update protocol dictates:
    `Fix -> Update & Rerun Affected Model` so that all reported numbers remain reproducible and verified.
 

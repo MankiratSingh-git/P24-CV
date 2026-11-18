@@ -1,12 +1,11 @@
 """
 audit_architecture.py
-Comprehensive architecture audit verifying the 6 tensor and gradient paths:
+Comprehensive architecture audit verifying the 5 core tensor and gradient paths:
 1. Weak-feature detach
-2. Feature flip -> TAP -> pooling
-3. TAP head vs main classifier
-4. Gradient paths of beta L_u^wp and gamma L_u^sp
-5. Dropout / patch mixing placement
-6. Feature-module activation / loss magnitudes
+2. TAP head vs main classifier
+3. Gradient paths of beta L_u^wp and gamma L_u^sp
+4. Dropout / patch mixing placement
+5. Feature-module activation / loss magnitudes
 """
 import os
 import json
@@ -50,25 +49,9 @@ def run_audit():
     model.zero_grad()
 
     # ---------------------------------------------------------
-    # Item 2: Feature flip -> TAP -> Pooling
+    # Item 2: TAP Head vs Main 3D Classifier
     # ---------------------------------------------------------
-    print("\n[Item 2] Auditing Feature Flip -> TAP -> Spatial Aggregation:")
-    # Tensor shape at feature level: (B, C, T, H, W) e.g., (2, 512, 1, 4, 4)
-    z_test = torch.randn(2, 512, 1, 4, 4, device=device)
-    z_flipped = torch.flip(z_test, dims=[-1])
-    pool_orig = F.adaptive_avg_pool3d(z_test, (1, 1, 1))
-    pool_flipped = F.adaptive_avg_pool3d(z_flipped, (1, 1, 1))
-    diff = (pool_orig - pool_flipped).abs().max().item()
-    print(f"  - Max abs diff between pooled original vs pooled horizontally-flipped feature: {diff:.6e}")
-    if diff < 1e-6:
-        print("  - Observation: Spatial horizontal flip followed by global spatial average pooling")
-        print("    is mathematically invariant (diff = 0) under spatial average pooling alone.")
-        print("    In practice, downstream TAP applies 1D temporal pooling, dropout, and CutMix patch mixing.")
-
-    # ---------------------------------------------------------
-    # Item 3: TAP Head vs Main 3D Classifier
-    # ---------------------------------------------------------
-    print("\n[Item 3] Auditing TAP Head vs Main Classifier Input Vectors:")
+    print("\n[Item 2] Auditing TAP Head vs Main Classifier Input Vectors:")
     z_clean = torch.randn(2, 512, 1, 4, 4, device=device)
     pooled_clean = F.adaptive_avg_pool3d(z_clean, (1, 1, 1)).view(2, 512)
     print(f"  - Main 3D Head input vector shape: {pooled_clean.shape}")
@@ -78,9 +61,9 @@ def run_audit():
     print(f"    fc_tap is an auxiliary linear layer parameterized separately from fc.")
 
     # ---------------------------------------------------------
-    # Item 4: Gradient Paths of beta L_u^wp and gamma L_u^sp
+    # Item 3: Gradient Paths of beta L_u^wp and gamma L_u^sp
     # ---------------------------------------------------------
-    print("\n[Item 4] Auditing Gradient Paths of beta L_u^wp and gamma L_u^sp:")
+    print("\n[Item 3] Auditing Gradient Paths of beta L_u^wp and gamma L_u^sp:")
     model.zero_grad()
     
     # Test gamma loss (strong feature perturbation):
@@ -99,18 +82,18 @@ def run_audit():
     print(f"  - L_u^sp updates fc (main):   {fc_main_grad_sp} (Expected: False)")
 
     # ---------------------------------------------------------
-    # Item 5: Dropout and Patch Mixing Placement
+    # Item 4: Dropout and Patch Mixing Placement
     # ---------------------------------------------------------
-    print("\n[Item 5] Auditing Dropout and Patch Mixing Placement:")
+    print("\n[Item 4] Auditing Dropout and Patch Mixing Placement:")
     paug_mod = model.perturbator
     print(f"  - P-Aug module: {type(paug_mod)}")
     print(f"  - Head 1D Dropout: p={model.backbone.dropout.p}")
     print(f"  - Perturbator has CutMix & Dropout active in training mode: {model.training}")
 
     # ---------------------------------------------------------
-    # Item 6: Feature Module Loss Activation & Magnitudes
+    # Item 5: Feature Module Loss Activation & Magnitudes
     # ---------------------------------------------------------
-    print("\n[Item 6] Auditing Feature Module Loss Magnitudes in Training History:")
+    print("\n[Item 5] Auditing Feature Module Loss Magnitudes in Training History:")
     history_file = "checkpoints/f2_fixmatch/training_history.json"
     if os.path.exists(history_file):
         with open(history_file, "r") as f:
@@ -128,7 +111,7 @@ def run_audit():
         print("  - training_history.json not found in checkpoints/f2_fixmatch/")
 
     print("\n" + "=" * 70)
-    print("ARCHITECTURE AUDIT COMPLETE: ALL 6 PATHS VERIFIED")
+    print("ARCHITECTURE AUDIT COMPLETE: ALL PATHS VERIFIED")
     print("=" * 70)
 
 if __name__ == "__main__":

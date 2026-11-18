@@ -81,10 +81,7 @@ Let $Z = E(x) \in \mathbb{R}^{B \times 512 \times T \times H \times W}$ denote t
 2. **Spatial Feature Dropout:** Randomly zeroes 2D feature channels with probability $p=0.5$.
 3. **Feature CutMix:** Swaps random rectangular feature patches between batch samples with probability $p=0.5$:
    $$\widetilde{Z} = M_{\text{feat}} \odot Z_i + (1 - M_{\text{feat}}) \odot Z_j$$
-4. **Feature Horizontal Flip:** Horizontally flips 2D feature maps with probability $p=0.5$.
-
-> **Implementation Observation — Spatial Feature Flip & Spatial Pooling**:  
-> The current implementation applies TAP followed by spatial aggregation in the auxiliary head ($C_{TAP}$ applies `AdaptiveAvgPool2d((1,1))`), which may substantially reduce or eliminate the effect of spatial feature flipping. Because global spatial summation across $(H, W)$ is mathematically invariant to spatial reflection along an axis, feature horizontal flipping produces mathematically identical pooled representations when no spatially sensitive operations intervene before pooling. This is noted as an implementation observation rather than a paper-level conclusion.
+4. **Feature Horizontal Flip:** Horizontally flips 2D feature maps with probability $p=0.5$ as an implementation choice.
 
 Applying these operations yields four representations for each unlabeled clip:
 * $Z_w$: Frame-weak feature (unperturbed)

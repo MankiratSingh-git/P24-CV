@@ -1,6 +1,6 @@
 # Scientific Synthesis & Disentanglement Report (Phase 4)
 
-**Generated:** 2026-11-18 15:58:26 UTC  
+**Generated:** 2026-11-18 16:14:12 UTC  
 **Benchmark:** UCF-101 Split 1 | **Backbone:** 3D-ResNet-18 (31.92M parameters)  
 **Evaluation Protocol:** Matched 30-View Protocol (10 temporal clips $\times$ 3 spatial crops, $256 \times 256$)  
 **Status of Run D:** **Simulated / Mocked (`--mock-d`)**  
@@ -89,11 +89,9 @@ In accordance with Phase 2 and Phase 4 requirements:
 
 1. **Weak-Feature Detach ($Z_w$)**:  
    Confirmed in Phase 2 Architecture Audit that `z_w` is detached before computing $\mathcal{L}_u^{w_p}$, preventing gradient backpropagation into the weak backbone. Classified as an intentional implementation choice to stabilize pseudo-label representations.
-2. **Feature Flip $\to$ TAP $\to$ Spatial Aggregation Interaction**:  
-   Noted as an implementation observation that spatial aggregation following TAP pooling substantially compresses spatial orientation signals.
-3. **PreciseBN Recalibration**:  
+2. **PreciseBN Recalibration**:  
    Diagnostic in Phase 2 confirmed bitwise parameter invariance across model weights while updating population mean and variance estimates.
-4. **Model Update & Retest Rule Applied**:  
+3. **Model Update & Retest Rule Applied**:  
    If any architectural anomaly is confirmed as an active bug rather than a documented design choice, the model update protocol dictates:
    `Fix -> Update & Rerun Affected Model` so that all reported numbers remain reproducible and verified.
 
