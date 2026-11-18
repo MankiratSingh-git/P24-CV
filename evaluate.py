@@ -3,6 +3,7 @@ os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 import sys
 import argparse
+import json
 import time
 import numpy as np
 import torch
@@ -325,7 +326,6 @@ def main():
     total_params = sum(p.numel() for p in model.parameters()) / 1e6
 
     # Save metrics JSON alongside the checkpoint
-    import json
     ckpt_dir = os.path.dirname(args.checkpoint)
     mode_suffix = "full30view" if args.eval_mode == "full" else "singlecrop"
     result_file = os.path.join(ckpt_dir, f"eval_metrics_{mode_suffix}.json")

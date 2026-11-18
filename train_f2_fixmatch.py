@@ -384,7 +384,6 @@ def main():
             hist_file = os.path.join(args.output_dir, "training_history.json")
             if os.path.isfile(hist_file):
                 try:
-                    import json
                     with open(hist_file, "r") as f:
                         old_history = json.load(f)
                         history = [h for h in old_history if h.get("epoch", 0) <= start_epoch]
