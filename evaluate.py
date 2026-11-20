@@ -215,11 +215,14 @@ def main():
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to model checkpoint (.pth)")
     parser.add_argument("--data-root", type=str, default="data/ucf101", help="Path to UCF-101 dataset")
     parser.add_argument("--splits-dir", type=str, default="data/splits", help="Path to splits directory")
+    parser.add_argument("--split-file", type=str, default=None, help="Optional direct path to evaluation split file")
     parser.add_argument("--split", type=int, default=1, choices=[1, 2, 3])
     parser.add_argument("--model-type", type=str, default="auto", choices=["auto", "resnet", "f2"], help="Model architecture")
     parser.add_argument("--eval-mode", type=str, default="full", choices=["single", "full"],
                         help="'single' = 1-clip center-crop, 'full' = 10-clip x 3-crop (30 views, official paper protocol)")
     parser.add_argument("--crop-size", type=int, default=256, help="Spatial crop resolution (256x256 as specified in Section 4.2 of paper)")
+    parser.add_argument("--batch-size", type=int, default=1, help="Batch size for DataLoader")
+    parser.add_argument("--output-file", type=str, default=None, help="Optional custom output path for metrics JSON")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
@@ -245,7 +248,7 @@ def main():
 
     model = model.to(device).eval()
 
-    val_split = os.path.join(args.splits_dir, f"ucf101_val_split_{args.split}_rawframes.txt")
+    val_split = args.split_file if args.split_file else os.path.join(args.splits_dir, f"ucf101_val_split_{args.split}_rawframes.txt")
     val_dataset = UCF101FullTestDataset(
         data_root=args.data_root, 
         split_file=val_split, 
@@ -325,10 +328,14 @@ def main():
 
     total_params = sum(p.numel() for p in model.parameters()) / 1e6
 
-    # Save metrics JSON alongside the checkpoint
-    ckpt_dir = os.path.dirname(args.checkpoint)
-    mode_suffix = "full30view" if args.eval_mode == "full" else "singlecrop"
-    result_file = os.path.join(ckpt_dir, f"eval_metrics_{mode_suffix}.json")
+    # Save metrics JSON alongside the checkpoint or to custom output-file
+    if args.output_file:
+        result_file = args.output_file
+        os.makedirs(os.path.dirname(os.path.abspath(result_file)), exist_ok=True)
+    else:
+        ckpt_dir = os.path.dirname(args.checkpoint)
+        mode_suffix = "full30view" if args.eval_mode == "full" else "singlecrop"
+        result_file = os.path.join(ckpt_dir, f"eval_metrics_{mode_suffix}.json")
     results_data = {
         "checkpoint": os.path.abspath(args.checkpoint),
         "split": args.split,
