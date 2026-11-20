@@ -12,13 +12,21 @@ data/*
 *.mp4
 *.mkv
 
-# Model Checkpoints and Weights (>250MB per model)
-checkpoints/
+# Model Weights (>250MB per model) - Only ignore binary weights, track all reports/metrics
 *.pth
 *.pt
 *.ckpt
 *.bin
 *.onnx
+
+# Explicitly track all reports, metrics, configs, and plots inside results/ and checkpoints/
+!results/
+!results/**
+!checkpoints/**/
+!checkpoints/**/*.json
+!checkpoints/**/*.csv
+!checkpoints/**/*.png
+!checkpoints/**/*.md
 
 # Python Virtual Environments
 .venv/
