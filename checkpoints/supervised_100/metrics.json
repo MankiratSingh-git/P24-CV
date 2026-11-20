@@ -1,0 +1,9 @@
+{
+  "model": "Supervised Full Baseline (100% Labeled)",
+  "dataset": "UCF-101 Split 1 (100% Labeled)",
+  "best_epoch": 110,
+  "best_val_top1": 71.69,
+  "best_val_top5": 89.14,
+  "epochs": 120,
+  "checkpoint": "checkpoints/supervised_100/best_model.pth"
+}

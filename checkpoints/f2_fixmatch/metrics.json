@@ -1,0 +1,8 @@
+{
+  "model": "F2-FixMatch (Bi-modal RGB + TG, P-Aug, MPL)",
+  "dataset": "UCF-101 Split 1 (10% Labeled)",
+  "best_epoch": 210,
+  "best_val_top1": 56.15,
+  "total_training_hours": 17.26,
+  "checkpoint": "checkpoints/f2_fixmatch\\best_model.pth"
+}

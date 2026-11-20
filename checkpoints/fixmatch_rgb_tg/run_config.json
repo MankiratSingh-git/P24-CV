@@ -1,0 +1,32 @@
+{
+  "git_commit": "2542e79b3f951edd34aaf049e881396df4d5693b",
+  "seed": 42,
+  "command_line": "train_f2_fixmatch.py --data-root data/ucf101 --splits-dir data/splits --labeled-percent 10 --split 1 --epochs 220 --warmup-epochs 40 --batch-size 4 --mu 4 --accum-steps 2 --alpha 2.0 --beta 0.0 --gamma 0.0 --threshold 0.3 --lr 0.2 --seed 42 --output-dir checkpoints/fixmatch_rgb_tg",
+  "args": {
+    "data_root": "data/ucf101",
+    "splits_dir": "data/splits",
+    "labeled_percent": 10,
+    "split": 1,
+    "epochs": 220,
+    "warmup_epochs": 40,
+    "batch_size": 4,
+    "batch_size_unlabeled": null,
+    "mu": 4,
+    "lr": 0.2,
+    "momentum": 0.9,
+    "weight_decay": 0.0001,
+    "threshold": 0.3,
+    "alpha": 2.0,
+    "beta": 0.0,
+    "gamma": 0.0,
+    "rampup_epochs": 30,
+    "accum_steps": 2,
+    "seed": 42,
+    "num_workers": 4,
+    "device": "cuda",
+    "output_dir": "checkpoints/fixmatch_rgb_tg",
+    "eval_freq": 5,
+    "resume": null
+  },
+  "start_time": "2026-11-19 12:55:11"
+}

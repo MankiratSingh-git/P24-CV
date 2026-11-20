@@ -1,9 +1,9 @@
 # Scientific Synthesis & Disentanglement Report (Phase 4)
 
-**Generated:** 2026-11-18 16:14:12 UTC  
+**Generated:** 2026-11-20 13:28:34 UTC  
 **Benchmark:** UCF-101 Split 1 | **Backbone:** 3D-ResNet-18 (31.92M parameters)  
 **Evaluation Protocol:** Matched 30-View Protocol (10 temporal clips $\times$ 3 spatial crops, $256 \times 256$)  
-**Status of Run D:** **Simulated / Mocked (`--mock-d`)**  
+**Status of Run D:** Physical Run (30-View Matched)  
 
 > [!IMPORTANT]
 > **Approved Model Update Rule:**  
@@ -19,19 +19,19 @@ To measure what each architectural component actually contributes without confla
 
 | Run | Modality | Losses ($\beta, \gamma$) | Model Description | Top-1 Accuracy (%) | Top-5 Accuracy (%) | Gain vs 10% Sup (B) | Gain vs FixMatch (C) | Experimental Status |
 | :---: | :---: | :---: | :--- | :---: | :---: | :---: | :---: | :--- |
-| **A** | RGB | None | 100% Supervised (Oracle) | **71.69%** | **89.14%** | +40.37% | +33.20% | Upper reference oracle |
+| **A** | RGB | None | 100% Supervised (Oracle) | **72.91%** | **90.06%** | +41.59% | +34.42% | Upper reference oracle |
 | **B** | RGB | None | 10% Supervised Baseline | **31.32%** | **54.11%** | *Reference* | -7.17% | Lower supervised baseline |
 | **C** | RGB | None | FixMatch RGB Baseline | **38.49%** | **64.00%** | +7.17% | *Reference* | Single-stream SSL baseline |
-| **D** | **RGB + TG** | **$\beta=0.0, \gamma=0.0$** | **Dual-Stream Control** | **55.00%** | **N/A** | **+23.68%** | **+16.51%** | **Simulated / Mocked (`--mock-d`)** |
+| **D** | **RGB + TG** | **$\beta=0.0, \gamma=0.0$** | **Dual-Stream Control** | **59.03%** | **82.90%** | **+27.71%** | **+20.54%** | Physical Run (30-View Matched) |
 | **F** | **RGB + TG** | $\beta=2.0, \gamma=1.0$ | Full $F^2$-FixMatch | **59.90%** | **83.32%** | **+28.58%** | **+21.41%** | Test-selected historical / canonical |
 
 ```
 Top-1 Accuracy Across Methodological Ladder:
   Run B (Supervised 10%):  [███████████                 ] 31.32%
   Run C (FixMatch RGB):    [█████████████               ] 38.49% (+7.17% over 10% Sup)
-  Run D (Dual-Stream RGB+TG): [███████████████████         ] 55.00% (+16.51% over FixMatch RGB)
-  Run F (Full F²-FixMatch):[█████████████████████       ] 59.90% (+4.90% over Run D | +21.41% over Run C)
-  Run A (Supervised 100%): [█████████████████████████   ] 71.69% (Oracle upper reference)
+  Run D (Dual-Stream RGB+TG): [█████████████████████       ] 59.03% (+20.54% over FixMatch RGB)
+  Run F (Full F²-FixMatch):[█████████████████████       ] 59.90% (+0.87% over Run D | +21.41% over Run C)
+  Run A (Supervised 100%): [██████████████████████████  ] 72.91% (Oracle upper reference)
 ```
 
 ---
@@ -48,14 +48,14 @@ Per Section 1.2 of the approved implementation plan, the gains over single-strea
 
 | Metric | Formulation | Absolute Difference | Share of Total Gain (%) | Primary Attribution |
 | :--- | :---: | :---: | :---: | :--- |
-| **$\Delta_{\text{dual}}$** | $D - C$ | **+16.51 pts** | **77.1%** | Effect of bi-modal RGB+TG dual-stream configuration |
-| **$\Delta_{\text{feat}}$** | $F - D$ | **+4.90 pts** | **22.9%** | Incremental effect of feature-level consistency module |
+| **$\Delta_{\text{dual}}$** | $D - C$ | **+20.54 pts** | **95.9%** | Effect of bi-modal RGB+TG dual-stream configuration |
+| **$\Delta_{\text{feat}}$** | $F - D$ | **+0.87 pts** | **4.1%** | Incremental effect of feature-level consistency module |
 | **$\Delta_{\text{total}}$** | $F - C$ | **+21.41 pts** | **100.0%** | Total semi-supervised advantage over FixMatch-RGB |
 
 ```
 Disentanglement Breakdown of Gain over FixMatch-RGB (+21.41 pts):
-  Dual-Stream Config (D - C):  [████████████████         ] +16.51 pts (77.1%)
-  Feature Module (F - D):      [█████                    ] +4.90 pts (22.9%)
+  Dual-Stream Config (D - C):  [███████████████████      ] +20.54 pts (95.9%)
+  Feature Module (F - D):      [█                        ] +0.87 pts (4.1%)
 ```
 
 ---
@@ -64,21 +64,21 @@ Disentanglement Breakdown of Gain over FixMatch-RGB (+21.41 pts):
 
 Based on Section 1.3 of the approved scientific implementation plan:
 
-### **Active Classification: Case A — Dual-Stream Dominant with Meaningful Feature Regularization**
+### **Active Classification: Case C — Dual-Stream Configuration Dominant; Feature Module Negligible**
 
 > **Scientific Interpretation:**  
-> The dual-stream RGB+TG configuration is the dominant factor (Delta_dual = +16.51 pts); the feature-level module provides meaningful auxiliary regularization (Delta_feat = +4.90 pts). Empirical progression: C=38.49% -> D=55.00% -> F=59.90%.
+> Most of the observed gain is attributable to the dual-stream configuration (Delta_dual = +20.54 pts); the feature-level module adds negligible benefit (Delta_feat = +0.87 pts < 2.0 pts). Empirical progression: C=38.49% -> D=59.03% -> F=59.90%.
 
-* **Dominant Performance Factor:** RGB+TG Dual-Stream Configuration (Primary) + Feature Regularization (Auxiliary)
-* **Recommended Next Action:** Publish & Maintain: Dual-stream provides the major accuracy leap, while auxiliary feature losses supply consistent regularization. Final canonical benchmarks are fully supported.
+* **Dominant Performance Factor:** RGB+TG Dual-Stream Configuration
+* **Recommended Next Action:** Assess Impact & Audit: Investigate weak-feature detach (Z_w) and loss weighting. Determine whether architectural constraints in the current head prevented feature consistency losses from delivering auxiliary regularizing benefit.
 
 ### Reference Pre-Declared Scenarios Comparison:
 
 | Pre-Declared Case | Trajectory ($C \to D \to F$) | Predominant Driver | Theoretical Interpretation | Status |
 | :---: | :---: | :--- | :--- | :---: |
-| **Case A** | $38.5 \to \approx 55 \to 59.9$ | Dual-stream (+16.5 pts) + Feature (+4.9 pts) | Dual-stream is dominant; feature module provides meaningful auxiliary regularization. | **SELECTED** |
+| **Case A** | $38.5 \to \approx 55 \to 59.9$ | Dual-stream (+16.5 pts) + Feature (+4.9 pts) | Dual-stream is dominant; feature module provides meaningful auxiliary regularization. | Alternative |
 | **Case B** | $38.5 \to \approx 42 \to 59.9$ | Feature module (+17.9 pts) | Feature-level machinery is the primary driver of performance. | Alternative |
-| **Case C** | $38.5 \to \approx 55 \to \approx 56$ | Dual-stream dominant | Most gain attributable to dual-stream; feature module adds negligible benefit. | Alternative |
+| **Case C** | $38.5 \to \approx 55 \to \approx 56$ | Dual-stream dominant | Most gain attributable to dual-stream; feature module adds negligible benefit. | **SELECTED** |
 | **Case D** | $38.5 \to \approx 40 \to \approx 41$ | Neither | Implementation does not reproduce claimed $F^2$ benefit over FixMatch-RGB. | Alternative |
 
 ---
@@ -99,8 +99,8 @@ In accordance with Phase 2 and Phase 4 requirements:
 
 ## 5. Artifact Provenance Registry
 
-* **Run A (Supervised 100%):** `checkpoints/supervised_100/best_model.pth`
+* **Run A (Supervised 100%):** `C:\Users\johnm\P24-CV\checkpoints\supervised_100\best_model.pth`
 * **Run B (Supervised 10%):** `C:\Users\johnm\P24-CV\checkpoints\supervised_baseline\best_model.pth`
 * **Run C (FixMatch RGB):** `C:\Users\johnm\P24-CV\checkpoints\fixmatch_baseline\best_model.pth`
-* **Run D (RGB+TG Control):** `checkpoints/fixmatch_rgb_tg/mocked_acc_55.0.pth`
+* **Run D (RGB+TG Control):** `C:\Users\johnm\P24-CV\checkpoints\fixmatch_rgb_tg\best_model.pth`
 * **Run F ($F^2$-FixMatch):** `C:\Users\johnm\P24-CV\checkpoints\f2_fixmatch\best_model.pth`

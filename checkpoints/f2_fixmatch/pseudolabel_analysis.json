@@ -1,0 +1,229 @@
+{
+  "num_samples": 8584,
+  "has_ground_truth": true,
+  "tau_sweep": [
+    {
+      "tau": 0.1,
+      "n_accepted": 8584,
+      "total_samples": 8584,
+      "coverage": 1.0,
+      "coverage_percent": 100.0,
+      "n_correct": 6440,
+      "precision": 0.750233,
+      "precision_percent": 75.02
+    },
+    {
+      "tau": 0.15,
+      "n_accepted": 8572,
+      "total_samples": 8584,
+      "coverage": 0.998602,
+      "coverage_percent": 99.86,
+      "n_correct": 6431,
+      "precision": 0.750233,
+      "precision_percent": 75.02
+    },
+    {
+      "tau": 0.2,
+      "n_accepted": 8541,
+      "total_samples": 8584,
+      "coverage": 0.994991,
+      "coverage_percent": 99.5,
+      "n_correct": 6415,
+      "precision": 0.751083,
+      "precision_percent": 75.11
+    },
+    {
+      "tau": 0.25,
+      "n_accepted": 8486,
+      "total_samples": 8584,
+      "coverage": 0.988583,
+      "coverage_percent": 98.86,
+      "n_correct": 6391,
+      "precision": 0.753123,
+      "precision_percent": 75.31
+    },
+    {
+      "tau": 0.3,
+      "n_accepted": 8382,
+      "total_samples": 8584,
+      "coverage": 0.976468,
+      "coverage_percent": 97.65,
+      "n_correct": 6332,
+      "precision": 0.755428,
+      "precision_percent": 75.54
+    },
+    {
+      "tau": 0.35,
+      "n_accepted": 8204,
+      "total_samples": 8584,
+      "coverage": 0.955732,
+      "coverage_percent": 95.57,
+      "n_correct": 6229,
+      "precision": 0.759264,
+      "precision_percent": 75.93
+    },
+    {
+      "tau": 0.4,
+      "n_accepted": 7932,
+      "total_samples": 8584,
+      "coverage": 0.924045,
+      "coverage_percent": 92.4,
+      "n_correct": 6085,
+      "precision": 0.767146,
+      "precision_percent": 76.71
+    },
+    {
+      "tau": 0.45,
+      "n_accepted": 7635,
+      "total_samples": 8584,
+      "coverage": 0.889445,
+      "coverage_percent": 88.94,
+      "n_correct": 5903,
+      "precision": 0.77315,
+      "precision_percent": 77.31
+    },
+    {
+      "tau": 0.5,
+      "n_accepted": 7243,
+      "total_samples": 8584,
+      "coverage": 0.843779,
+      "coverage_percent": 84.38,
+      "n_correct": 5663,
+      "precision": 0.781858,
+      "precision_percent": 78.19
+    },
+    {
+      "tau": 0.55,
+      "n_accepted": 6697,
+      "total_samples": 8584,
+      "coverage": 0.780172,
+      "coverage_percent": 78.02,
+      "n_correct": 5313,
+      "precision": 0.79334,
+      "precision_percent": 79.33
+    },
+    {
+      "tau": 0.6,
+      "n_accepted": 6045,
+      "total_samples": 8584,
+      "coverage": 0.704217,
+      "coverage_percent": 70.42,
+      "n_correct": 4873,
+      "precision": 0.806121,
+      "precision_percent": 80.61
+    },
+    {
+      "tau": 0.65,
+      "n_accepted": 5354,
+      "total_samples": 8584,
+      "coverage": 0.623719,
+      "coverage_percent": 62.37,
+      "n_correct": 4371,
+      "precision": 0.816399,
+      "precision_percent": 81.64
+    },
+    {
+      "tau": 0.7,
+      "n_accepted": 4463,
+      "total_samples": 8584,
+      "coverage": 0.519921,
+      "coverage_percent": 51.99,
+      "n_correct": 3696,
+      "precision": 0.828143,
+      "precision_percent": 82.81
+    },
+    {
+      "tau": 0.75,
+      "n_accepted": 3580,
+      "total_samples": 8584,
+      "coverage": 0.417055,
+      "coverage_percent": 41.71,
+      "n_correct": 3030,
+      "precision": 0.846369,
+      "precision_percent": 84.64
+    },
+    {
+      "tau": 0.8,
+      "n_accepted": 2632,
+      "total_samples": 8584,
+      "coverage": 0.306617,
+      "coverage_percent": 30.66,
+      "n_correct": 2265,
+      "precision": 0.860562,
+      "precision_percent": 86.06
+    },
+    {
+      "tau": 0.85,
+      "n_accepted": 1756,
+      "total_samples": 8584,
+      "coverage": 0.204567,
+      "coverage_percent": 20.46,
+      "n_correct": 1531,
+      "precision": 0.871868,
+      "precision_percent": 87.19
+    },
+    {
+      "tau": 0.9,
+      "n_accepted": 940,
+      "total_samples": 8584,
+      "coverage": 0.109506,
+      "coverage_percent": 10.95,
+      "n_correct": 834,
+      "precision": 0.887234,
+      "precision_percent": 88.72
+    },
+    {
+      "tau": 0.95,
+      "n_accepted": 323,
+      "total_samples": 8584,
+      "coverage": 0.037628,
+      "coverage_percent": 3.76,
+      "n_correct": 285,
+      "precision": 0.882353,
+      "precision_percent": 88.24
+    }
+  ],
+  "confidence_distribution": {
+    "mean": 0.6886,
+    "std": 0.1769,
+    "median": 0.709,
+    "min": 0.12,
+    "max": 0.99,
+    "percentiles": {
+      "10": 0.4356,
+      "25": 0.5715,
+      "50": 0.709,
+      "75": 0.8257,
+      "90": 0.9055,
+      "95": 0.94
+    }
+  },
+  "tau_0_3_summary": {
+    "tau": 0.3,
+    "n_accepted": 8382,
+    "total_samples": 8584,
+    "coverage": 0.976468,
+    "coverage_percent": 97.65,
+    "n_correct": 6332,
+    "precision": 0.755428,
+    "precision_percent": 75.54
+  },
+  "tau_0_8_summary": {
+    "tau": 0.8,
+    "n_accepted": 2632,
+    "total_samples": 8584,
+    "coverage": 0.306617,
+    "coverage_percent": 30.66,
+    "n_correct": 2265,
+    "precision": 0.860562,
+    "precision_percent": 86.06
+  },
+  "metadata": {
+    "checkpoint": "C:\\Code\\P24-CV\\checkpoints\\f2_fixmatch\\best_model.pth",
+    "split_file": "C:\\Code\\P24-CV\\data\\splits\\ucf101_train_10_percent_unlabeled_split_1_rawframes.txt",
+    "execution_mode": "synthetic",
+    "device": "cpu",
+    "elapsed_seconds": 16.74,
+    "seed": 42
+  }
+}

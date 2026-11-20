@@ -99,21 +99,21 @@ Our single-GPU reproduction achieves **59.90%** on the official 30-view protocol
 
 | Run | Modality | Losses | Description | Top-1 (%) | Top-5 (%) | Gain vs 10% Sup (B) | Gain vs FixMatch (C) | Status |
 | :---: | :---: | :---: | :--- | :---: | :---: | :---: | :---: | :--- |
-| **A** | RGB | None | 100% Supervised Oracle | **71.69%** | **89.14%** | +40.37% | +33.20% | Upper reference oracle |
+| **A** | RGB | None | 100% Supervised Oracle | **72.91%** | **90.06%** | +41.59% | +34.42% | Upper reference oracle |
 | **B** | RGB | None | 10% Supervised Baseline | **31.32%** | **54.11%** | *Reference* | -7.17% | Lower supervised baseline |
 | **C** | RGB | None | FixMatch RGB Baseline | **38.49%** | **64.00%** | +7.17% | *Reference* | Single-stream SSL |
-| **D** | **RGB + TG** | **$\beta=0.0, \gamma=0.0$** | **Dual-Stream Control** | **55.00%** | **N/A** | **+23.68%** | **+16.51%** | Simulated / Mocked (`--mock-d`) |
+| **D** | **RGB + TG** | **$\beta=0.0, \gamma=0.0$** | **Dual-Stream Control** | **59.03%** | **82.90%** | **+27.71%** | **+20.54%** | Matched 30-View Test |
 | **F** | **RGB + TG** | $\beta=2.0, \gamma=1.0$ | Full $F^2$-FixMatch | **59.90%** | **83.32%** | **+28.58%** | **+21.41%** | Canonical / Verified |
 
 ### 4.2 Disentangled Mathematical Attribution
 
-* **Dual-Stream Configuration ($\Delta_{\text{dual}} = D - C$):** **+16.51 pts** (77.1% of total SSL gain).
-* **Feature-Level Consistency Module ($\Delta_{\text{feat}} = F - D$):** **+4.90 pts** (22.9% of total SSL gain).
+* **Dual-Stream Configuration ($\Delta_{\text{dual}} = D - C$):** **+20.54 pts** (95.9% of total SSL gain).
+* **Feature-Level Consistency Module ($\Delta_{\text{feat}} = F - D$):** **+0.87 pts** (4.1% of total SSL gain).
 * **Total Semi-Supervised Advantage ($\Delta_{\text{total}} = F - C$):** **+21.41 pts** (100.0%).
 
-### 4.3 Pre-Declared Outcome Classification: Case A (Dual-Stream Dominant with Meaningful Feature Regularization)
+### 4.3 Pre-Declared Outcome Classification: Case C (Dual-Stream Configuration Dominant; Feature Module Negligible)
 
-* **Empirical Trajectory:** $C = 38.49\% \longrightarrow D = 55.00\% \longrightarrow F = 59.90\%$.
-* **Primary Driver:** RGB+TG Dual-Stream Configuration (Primary) + Feature Regularization (Auxiliary).
-* **Interpretation:** The dual-stream RGB+TG configuration is the dominant factor (Delta_dual = +16.51 pts); the feature-level module provides meaningful auxiliary regularization (Delta_feat = +4.90 pts). Empirical progression: C=38.49% -> D=55.00% -> F=59.90%.
-* **Protocol Action:** Publish & Maintain: Dual-stream provides the major accuracy leap, while auxiliary feature losses supply consistent regularization. Final canonical benchmarks are fully supported.
+* **Empirical Trajectory:** $C = 38.49\% \longrightarrow D = 59.03\% \longrightarrow F = 59.90\%$.
+* **Primary Driver:** RGB+TG Dual-Stream Configuration.
+* **Interpretation:** Most of the observed gain is attributable to the dual-stream configuration (Delta_dual = +20.54 pts); the feature-level module adds negligible benefit (Delta_feat = +0.87 pts < 2.0 pts). Empirical progression: C=38.49% -> D=59.03% -> F=59.90%.
+* **Protocol Action:** Assess Impact & Audit: Investigate weak-feature detach (Z_w) and loss weighting. Determine whether architectural constraints in the current head prevented feature consistency losses from delivering auxiliary regularizing benefit.
