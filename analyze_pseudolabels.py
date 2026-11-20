@@ -518,6 +518,8 @@ def main():
                         help="Pseudo-label generation modality: 'mpl' (Multihead RGB+TG, official FixMatch) or 'rgb' (RGB only)")
     parser.add_argument("--num-synthetic-batches", type=int, default=5,
                         help="Number of synthetic video batches to pass through model in dry-run mode")
+    parser.add_argument("--output-dir", type=str, default=None,
+                        help="Output directory to save JSON, CSV, and plot files")
     parser.add_argument("--output-json", type=str, default=None, help="Output path for JSON metrics")
     parser.add_argument("--output-csv", type=str, default=None, help="Output path for CSV table")
     parser.add_argument("--output-plot", type=str, default=None, help="Output path for diagnostic plot PNG")
@@ -540,8 +542,14 @@ def main():
     samples = parse_unlabeled_split(args.split_file)
     print(f"Loaded {len(samples)} unlabeled samples with hidden ground truth from split.")
 
-    # Determine default output directory based on checkpoint
-    ckpt_dir = os.path.dirname(args.checkpoint) if os.path.exists(args.checkpoint) else "checkpoints/f2_fixmatch"
+    # Determine output directory
+    if args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+        ckpt_dir = args.output_dir
+    elif os.path.exists(args.checkpoint):
+        ckpt_dir = os.path.dirname(args.checkpoint)
+    else:
+        ckpt_dir = "checkpoints/f2_fixmatch"
     out_json = args.output_json or os.path.join(ckpt_dir, "pseudolabel_analysis.json")
     out_csv = args.output_csv or os.path.join(ckpt_dir, "pseudolabel_analysis.csv")
     out_plot = args.output_plot or os.path.join(ckpt_dir, "pseudolabel_curves.png")

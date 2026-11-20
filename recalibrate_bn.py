@@ -361,6 +361,8 @@ def main():
     parser = argparse.ArgumentParser(description="PreciseBN Recalibration Protocol for 3D Video ResNet Checkpoints")
     parser.add_argument("--checkpoint", type=str, required=True,
                         help="Path to input checkpoint (.pth)")
+    parser.add_argument("--output-dir", type=str, default=None,
+                        help="Directory to save recalibrated checkpoint (.pth) and JSON report")
     parser.add_argument("--output", type=str, default=None,
                         help="Path to save recalibrated checkpoint (.pth)")
     parser.add_argument("--output-report", type=str, default=None,
@@ -396,8 +398,12 @@ def main():
     )
     print(f"Loaded architecture: {'F2FixMatchModel' if is_f2 else 'ResNet3D18'}")
 
-    # Determine default output paths
-    ckpt_dir = os.path.dirname(os.path.abspath(args.checkpoint))
+    # Determine output paths
+    if args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+        ckpt_dir = args.output_dir
+    else:
+        ckpt_dir = os.path.dirname(os.path.abspath(args.checkpoint))
     stem = os.path.splitext(os.path.basename(args.checkpoint))[0]
     out_checkpoint = args.output or os.path.join(ckpt_dir, f"{stem}_precise_bn.pth")
     out_report = args.output_report or os.path.join(ckpt_dir, f"{stem}_precise_bn_report.json")
