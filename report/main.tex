@@ -107,8 +107,9 @@ To decouple the bi-modal input stream from the feature consistency module, we ex
     \Delta_{\text{total}} &= F - C = +21.41\text{ pts (100.0\%)} \\
     \Delta_{\text{dual}} &= D - C = 59.03 - 38.49 = \mathbf{+20.54\text{ pts (95.9\%)}} \\
     \Delta_{\text{feat}} &= F - D = 59.90 - 59.03 = \mathbf{+0.87\text{ pts (4.1\%)}}
-\end{align}
-\textbf{Outcome}: These physical measurements unambiguously validate \textbf{Case C}: the dual-stream configuration accounts for 95.9\% of the performance gain over FixMatch RGB. The feature-level consistency module delivers an incremental $+0.87\%$. Attributing the $+21.41\%$ gain to P-Aug and MPL was an empirical misattribution.
+\textbf{Outcome \& Causal Scope}: These physical measurements unambiguously validate \textbf{Case C}: transitioning to the integrated dual-stream framework as a package accounts for 95.9\% of the observed improvement over single-stream FixMatch ($+20.54$ pts), while the feature-level consistency module delivers an incremental $+0.87\%$. Consequently, attributing the $+21.41\%$ leap primarily to P-Aug and MPL was an empirical misattribution.
+
+Importantly, we emphasize that Run~D introduces the dual-stream configuration as an integrated package (bi-modal inputs, shared backbone parameterization, dual-branch supervised losses, cross-modal ensemble pseudo-labeling, and joint optimization dynamics). Our experiment rigorously establishes that this integrated package—rather than the feature consistency module—drives the performance jump, while leaving the finer-grained internal decomposition among individual sub-components (such as TG inputs alone vs. pseudo-label ensembling) as an open question for future work.
 
 \subsection{Confidence Threshold Ablation: $\tau = 0.95$ vs. $0.30$}
 To resolve whether video SSL requires lower thresholds, we trained FixMatch RGB with the canonical image threshold $\tau = 0.95$:
@@ -131,7 +132,7 @@ In dual-stream training, shared BatchNorm3d layers blend statistics across RGB a
 \label{sec:changes}
 In accordance with course guidelines, we document our pre-declared gates and changes:
 \begin{enumerate}
-    \item \textbf{Isolating Dual-Stream}: The original proposal attributed the $+21\%$ gain to P-Aug and MPL. Following critical review, we introduced Run D to isolate the TG stream, which revealed that 95.9\% of the gain originates from the dual-stream configuration.
+    \item \textbf{Decoupling the Dual-Stream Framework}: The original proposal attributed the $+21\%$ gain to P-Aug and MPL. Following critical review, we introduced Run D to isolate the dual-stream framework as an integrated package, revealing that 95.9\% of the observed gain over FixMatch RGB occurs upon transitioning to the dual-stream pipeline, while P-Aug and MPL contribute an incremental $+0.87\%$.
     \item \textbf{Pruning Speculative Per-Class Claims}: We eliminated unverified qualitative failure stories (e.g., ``confused with PoleVault'') and replaced them with rigorous pseudo-label precision curves and PreciseBN diagnostics.
     \item \textbf{Standardized 30-View Protocol}: We eliminated mixed-protocol comparisons by evaluating all 5 rungs under the identical 30-view multi-crop testing standard.
 \end{enumerate}

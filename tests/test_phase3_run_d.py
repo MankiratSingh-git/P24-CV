@@ -294,7 +294,7 @@ class TestPhase3RunD(unittest.TestCase):
         Verify that scripts/run_d.sh and scripts/run_d.bat exist, contain required headers,
         error flags, and exact Run D hyperparameters.
         """
-        repo_root = os.path.dirname(os.path.abspath(__file__))
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         sh_path = os.path.join(repo_root, "scripts", "run_d.sh")
         bat_path = os.path.join(repo_root, "scripts", "run_d.bat")
 
@@ -331,7 +331,7 @@ class TestPhase3RunD(unittest.TestCase):
 
     def test_bash_syntax_if_available(self):
         """If a functional bash executable is available, test run_d.sh syntax with bash -n."""
-        repo_root = os.path.dirname(os.path.abspath(__file__))
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         sh_path = os.path.join(repo_root, "scripts", "run_d.sh")
 
         candidates = [
@@ -358,7 +358,7 @@ class TestPhase3RunD(unittest.TestCase):
 
     def test_bash_run_d_help_invocation(self):
         """If a functional bash executable is available, test scripts/run_d.sh --help execution."""
-        repo_root = os.path.dirname(os.path.abspath(__file__))
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         sh_path = os.path.join(repo_root, "scripts", "run_d.sh")
 
         candidates = [
@@ -440,7 +440,7 @@ class TestPhase3RunD(unittest.TestCase):
         """Verify scripts/run_d.bat executes and outputs Run D configuration banner on Windows."""
         if sys.platform != "win32":
             self.skipTest("Windows-only batch script test")
-        repo_root = os.path.dirname(os.path.abspath(__file__))
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         bat_path = os.path.join(repo_root, "scripts", "run_d.bat")
         res = subprocess.run(["cmd.exe", "/c", bat_path, "--help"], capture_output=True, text=True)
         self.assertEqual(res.returncode, 0, f"run_d.bat failed with: {res.stderr}")

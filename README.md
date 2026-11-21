@@ -65,9 +65,10 @@ Prior literature attributed the +21-point gain from FixMatch (38.49%) to $F^2$-F
 
 $$\Delta_{\text{total}} = F - C = \Delta_{\text{dual}} + \Delta_{\text{feat}}$$
 
-* **$\Delta_{\text{dual}} = D - C = 59.03\% - 38.49\% = \mathbf{+20.54\text{ pts (95.9\% of SSL gain)}}$**: Gain from introducing the bi-modal RGB+TG dual-stream configuration (shared backbone, dual-stream inputs, and RGB+TG ensemble pseudo-label generation).
+* **$\Delta_{\text{dual}} = D - C = 59.03\% - 38.49\% = \mathbf{+20.54\text{ pts (95.9\% of SSL gain)}}$**: Gain associated with transitioning to the integrated dual-stream framework package (shared backbone, bi-modal RGB+TG inputs, dual supervised heads, cross-modal ensemble pseudo-label generation, and joint optimization dynamics).
 * **$\Delta_{\text{feat}} = F - D = 59.90\% - 59.03\% = \mathbf{+0.87\text{ pts (4.1\% of SSL gain)}}$**: Incremental gain from the feature-level consistency module (P-Aug perturbations and auxiliary consistency losses $\beta \mathcal{L}_u^{w_p} + \gamma \mathcal{L}_u^{s_p}$).
-* **Pre-declared Classification: Case C (Dual-Stream Configuration Dominant; Feature Module Negligible)**: The empirical progression confirms that 95.9% of the leap is driven by multi-modal dual-stream learning, while the feature-level module provides a minor incremental regularization.
+* **Pre-declared Classification: Case C (Dual-Stream Package Dominant; Feature Module Negligible)**: The empirical progression demonstrates that the integrated dual-stream framework as a package—rather than the feature-level consistency module—accounts for 95.9% of the gain over single-stream FixMatch.
+* **Important Causal Scope & Caveat**: Run D establishes that the dual-stream configuration *as an integrated package* accounts for the observed leap, whereas the feature-level consistency module adds an incremental +0.87 pts. We explicitly do not claim to have isolated the individual internal mechanisms within that package (e.g., TG inputs alone vs. ensemble pseudo-labeling vs. multi-modal optimization dynamics), which remains an open ablation for future work.
 
 ---
 

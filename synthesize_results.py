@@ -185,14 +185,19 @@ def classify_case(
         )
     elif delta_feat < negligible_feat_threshold:
         case_id = "Case C"
-        title = "Dual-Stream Configuration Dominant; Feature Module Negligible"
+        title = "Dual-Stream Package Dominant; Feature Module Negligible"
         description = (
-            f"Most of the observed gain is attributable to the dual-stream configuration "
-            f"(Delta_dual = {delta_dual:+.2f} pts); the feature-level module adds negligible benefit "
-            f"(Delta_feat = {delta_feat:+.2f} pts < {negligible_feat_threshold:.1f} pts). "
-            f"Empirical progression: C={c_top1:.2f}% -> D={d_top1:.2f}% -> F={f_top1:.2f}%."
+            f"The performance leap over FixMatch-RGB occurs when transitioning to the integrated dual-stream "
+            f"configuration package (Delta_dual = {delta_dual:+.2f} pts); adding the feature-level consistency module "
+            f"provides negligible incremental benefit (Delta_feat = {delta_feat:+.2f} pts < {negligible_feat_threshold:.1f} pts). "
+            f"Empirical progression: C={c_top1:.2f}% -> D={d_top1:.2f}% -> F={f_top1:.2f}%. "
+            f"Important Causal Caveat: Run D evaluates the dual-stream configuration as an integrated package "
+            f"(bi-modal inputs, shared backbone, cross-modal ensemble pseudo-labeling, and joint optimization dynamics). "
+            f"While this confirms that the dual-stream package—rather than the feature consistency module—accounts for the "
+            f"vast majority of the gain over FixMatch-RGB, isolating the individual internal components within that package "
+            f"(e.g. TG inputs alone vs. ensemble pseudo-labeling) remains an open question."
         )
-        dominant_factor = "RGB+TG Dual-Stream Configuration"
+        dominant_factor = "Integrated Dual-Stream Framework (Package Effect)"
         recommended_action = (
             "Assess Impact & Audit: Investigate weak-feature detach (Z_w) and loss weighting. "
             "Determine whether architectural constraints in the current head prevented "
@@ -346,7 +351,7 @@ Per Section 1.2 of the approved implementation plan, the gains over single-strea
 
 | Metric | Formulation | Absolute Difference | Share of Total Gain (%) | Primary Attribution |
 | :--- | :---: | :---: | :---: | :--- |
-| **$\\Delta_{{\\text{{dual}}}}$** | $D - C$ | **{attributions['delta_dual']:+.2f} pts** | **{attributions['share_dual']:.1f}%** | Effect of bi-modal RGB+TG dual-stream configuration |
+| **$\\Delta_{{\\text{{dual}}}}$** | $D - C$ | **{attributions['delta_dual']:+.2f} pts** | **{attributions['share_dual']:.1f}%** | Transition to integrated dual-stream package |
 | **$\\Delta_{{\\text{{feat}}}}$** | $F - D$ | **{attributions['delta_feat']:+.2f} pts** | **{attributions['share_feat']:.1f}%** | Incremental effect of feature-level consistency module |
 | **$\\Delta_{{\\text{{total}}}}$** | $F - C$ | **{attributions['delta_total']:+.2f} pts** | **100.0%** | Total semi-supervised advantage over FixMatch-RGB |
 
@@ -355,6 +360,10 @@ Disentanglement Breakdown of Gain over FixMatch-RGB ({attributions['delta_total'
   Dual-Stream Config (D - C):  {bar_dual} {attributions['delta_dual']:+.2f} pts ({attributions['share_dual']:.1f}%)
   Feature Module (F - D):      {bar_feat} {attributions['delta_feat']:+.2f} pts ({attributions['share_feat']:.1f}%)
 ```
+
+> [!NOTE]
+> **Scope of Attribution & Package Effect**:  
+> The comparison between Run D and Run C establishes that transitioning to the integrated dual-stream framework produces virtually the entirety (+20.54 pts out of +21.41 pts) of the empirical gap to $F^2$-FixMatch, while the feature module adds an incremental +0.87 pts. We emphasize that Run D evaluates the dual-stream configuration as a package (bi-modal inputs, shared backbone, dual heads, ensembling, and joint optimization dynamics); isolating the internal contributions of individual components within this package (e.g. TG inputs alone vs. ensemble pseudo-labeling) remains an open ablation.
 
 ---
 

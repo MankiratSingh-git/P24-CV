@@ -56,13 +56,16 @@
 
 ## Slide 6: The Core Ablation: Disentanglement Attribution
 * **Mathematical Decomposition**: $\Delta_{\text{total}} = F - C = \Delta_{\text{dual}} + \Delta_{\text{feat}}$
-* **Dual-Stream Configuration ($\Delta_{\text{dual}} = D - C$)**:
+* **Integrated Dual-Stream Package ($\Delta_{\text{dual}} = D - C$)**:
   * **+20.54 points** (**95.9%** of total SSL gain).
-  * Bi-modal RGB+TG inputs and ensemble pseudo-labeling drive the vast majority of performance.
+  * Transitioning to the dual-stream package (RGB+TG inputs, dual heads, ensembling) drives the empirical leap.
 * **Feature Consistency Module ($\Delta_{\text{feat}} = F - D$)**:
   * **+0.87 points** (**4.1%** of total SSL gain).
   * P-Aug + MPL adds minor incremental regularization.
-* **Outcome**: **Case C Confirmed**—Attributing the +21 points to P-Aug and MPL was an empirical misattribution.
+* **Outcome & Causal Scope**: **Case C Confirmed**
+  * Disproves the claim that the +21-point leap was caused by P-Aug and MPL.
+  * *Important Caveat*: Run D isolates the dual-stream framework *as a package*; finer-grained separation (e.g., TG alone vs. ensemble pseudo-labeling) remains an open research question.
+
 
 ---
 

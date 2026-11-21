@@ -1,6 +1,6 @@
 # Scientific Synthesis & Disentanglement Report (Phase 4)
 
-**Generated:** 2026-11-21 17:04:59 UTC  
+**Generated:** 2026-11-21 18:50:31 UTC  
 **Benchmark:** UCF-101 Split 1 | **Backbone:** 3D-ResNet-18 (31.92M parameters)  
 **Evaluation Protocol:** Matched 30-View Protocol (10 temporal clips $\times$ 3 spatial crops, $256 \times 256$)  
 **Status of Run D:** Physical Run (30-View Matched)  
@@ -48,7 +48,7 @@ Per Section 1.2 of the approved implementation plan, the gains over single-strea
 
 | Metric | Formulation | Absolute Difference | Share of Total Gain (%) | Primary Attribution |
 | :--- | :---: | :---: | :---: | :--- |
-| **$\Delta_{\text{dual}}$** | $D - C$ | **+20.54 pts** | **95.9%** | Effect of bi-modal RGB+TG dual-stream configuration |
+| **$\Delta_{\text{dual}}$** | $D - C$ | **+20.54 pts** | **95.9%** | Transition to integrated dual-stream package |
 | **$\Delta_{\text{feat}}$** | $F - D$ | **+0.87 pts** | **4.1%** | Incremental effect of feature-level consistency module |
 | **$\Delta_{\text{total}}$** | $F - C$ | **+21.41 pts** | **100.0%** | Total semi-supervised advantage over FixMatch-RGB |
 
@@ -58,18 +58,22 @@ Disentanglement Breakdown of Gain over FixMatch-RGB (+21.41 pts):
   Feature Module (F - D):      [█                        ] +0.87 pts (4.1%)
 ```
 
+> [!NOTE]
+> **Scope of Attribution & Package Effect**:  
+> The comparison between Run D and Run C establishes that transitioning to the integrated dual-stream framework produces virtually the entirety (+20.54 pts out of +21.41 pts) of the empirical gap to $F^2$-FixMatch, while the feature module adds an incremental +0.87 pts. We emphasize that Run D evaluates the dual-stream configuration as a package (bi-modal inputs, shared backbone, dual heads, ensembling, and joint optimization dynamics); isolating the internal contributions of individual components within this package (e.g. TG inputs alone vs. ensemble pseudo-labeling) remains an open ablation.
+
 ---
 
 ## 3. Pre-Declared Outcome Classification
 
 Based on Section 1.3 of the approved scientific implementation plan:
 
-### **Active Classification: Case C — Dual-Stream Configuration Dominant; Feature Module Negligible**
+### **Active Classification: Case C — Dual-Stream Package Dominant; Feature Module Negligible**
 
 > **Scientific Interpretation:**  
-> Most of the observed gain is attributable to the dual-stream configuration (Delta_dual = +20.54 pts); the feature-level module adds negligible benefit (Delta_feat = +0.87 pts < 2.0 pts). Empirical progression: C=38.49% -> D=59.03% -> F=59.90%.
+> The performance leap over FixMatch-RGB occurs when transitioning to the integrated dual-stream configuration package (Delta_dual = +20.54 pts); adding the feature-level consistency module provides negligible incremental benefit (Delta_feat = +0.87 pts < 2.0 pts). Empirical progression: C=38.49% -> D=59.03% -> F=59.90%. Important Causal Caveat: Run D evaluates the dual-stream configuration as an integrated package (bi-modal inputs, shared backbone, cross-modal ensemble pseudo-labeling, and joint optimization dynamics). While this confirms that the dual-stream package—rather than the feature consistency module—accounts for the vast majority of the gain over FixMatch-RGB, isolating the individual internal components within that package (e.g. TG inputs alone vs. ensemble pseudo-labeling) remains an open question.
 
-* **Dominant Performance Factor:** RGB+TG Dual-Stream Configuration
+* **Dominant Performance Factor:** Integrated Dual-Stream Framework (Package Effect)
 * **Recommended Next Action:** Assess Impact & Audit: Investigate weak-feature detach (Z_w) and loss weighting. Determine whether architectural constraints in the current head prevented feature consistency losses from delivering auxiliary regularizing benefit.
 
 ### Reference Pre-Declared Scenarios Comparison:

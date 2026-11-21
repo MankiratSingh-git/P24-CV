@@ -111,9 +111,9 @@ Our single-GPU reproduction achieves **59.90%** on the official 30-view protocol
 * **Feature-Level Consistency Module ($\Delta_{\text{feat}} = F - D$):** **+0.87 pts** (4.1% of total SSL gain).
 * **Total Semi-Supervised Advantage ($\Delta_{\text{total}} = F - C$):** **+21.41 pts** (100.0%).
 
-### 4.3 Pre-Declared Outcome Classification: Case C (Dual-Stream Configuration Dominant; Feature Module Negligible)
+### 4.3 Pre-Declared Outcome Classification: Case C (Dual-Stream Package Dominant; Feature Module Negligible)
 
 * **Empirical Trajectory:** $C = 38.49\% \longrightarrow D = 59.03\% \longrightarrow F = 59.90\%$.
-* **Primary Driver:** RGB+TG Dual-Stream Configuration.
-* **Interpretation:** Most of the observed gain is attributable to the dual-stream configuration (Delta_dual = +20.54 pts); the feature-level module adds negligible benefit (Delta_feat = +0.87 pts < 2.0 pts). Empirical progression: C=38.49% -> D=59.03% -> F=59.90%.
+* **Primary Driver:** Integrated Dual-Stream Framework (Package Effect).
+* **Interpretation:** The performance leap over FixMatch-RGB occurs when transitioning to the integrated dual-stream configuration package (Delta_dual = +20.54 pts); adding the feature-level consistency module provides negligible incremental benefit (Delta_feat = +0.87 pts < 2.0 pts). Empirical progression: C=38.49% -> D=59.03% -> F=59.90%. Important Causal Caveat: Run D evaluates the dual-stream configuration as an integrated package (bi-modal inputs, shared backbone, cross-modal ensemble pseudo-labeling, and joint optimization dynamics). While this confirms that the dual-stream package—rather than the feature consistency module—accounts for the vast majority of the gain over FixMatch-RGB, isolating the individual internal components within that package (e.g. TG inputs alone vs. ensemble pseudo-labeling) remains an open question.
 * **Protocol Action:** Assess Impact & Audit: Investigate weak-feature detach (Z_w) and loss weighting. Determine whether architectural constraints in the current head prevented feature consistency losses from delivering auxiliary regularizing benefit.
