@@ -1,6 +1,6 @@
 # Scientific Synthesis & Disentanglement Report (Phase 4)
 
-**Generated:** 2026-11-20 13:31:58 UTC  
+**Generated:** 2026-11-21 17:04:59 UTC  
 **Benchmark:** UCF-101 Split 1 | **Backbone:** 3D-ResNet-18 (31.92M parameters)  
 **Evaluation Protocol:** Matched 30-View Protocol (10 temporal clips $\times$ 3 spatial crops, $256 \times 256$)  
 **Status of Run D:** Physical Run (30-View Matched)  
