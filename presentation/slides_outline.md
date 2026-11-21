@@ -58,13 +58,17 @@
 * **Mathematical Decomposition**: $\Delta_{\text{total}} = F - C = \Delta_{\text{dual}} + \Delta_{\text{feat}}$
 * **Integrated Dual-Stream Package ($\Delta_{\text{dual}} = D - C$)**:
   * **+20.54 points** (**95.9%** of total SSL gain).
-  * Transitioning to the dual-stream package (RGB+TG inputs, dual heads, ensembling) drives the empirical leap.
+  * Transitioning to the dual-stream framework (RGB+TG inputs, dual heads, ensembling) drives the empirical leap.
 * **Feature Consistency Module ($\Delta_{\text{feat}} = F - D$)**:
-  * **+0.87 points** (**4.1%** of total SSL gain).
-  * P-Aug + MPL adds minor incremental regularization.
-* **Outcome & Causal Scope**: **Case C Confirmed**
-  * Disproves the claim that the +21-point leap was caused by P-Aug and MPL.
-  * *Important Caveat*: Run D isolates the dual-stream framework *as a package*; finer-grained separation (e.g., TG alone vs. ensemble pseudo-labeling) remains an open research question.
+  * **+0.87 points** (**4.1%** of total SSL gain) — statistically indistinguishable from evaluation noise.
+  * For $N=3,783$ test videos, $95\%$ margin of error is $\pm 1.56\%$ ($\sim 33$ videos); $+0.87\%$ is within the noise floor.
+* **Corroborated by Published Paper (Tu et al. Table 4)**:
+  * Paper's frame-level baseline A1 achieved 67.9% (+29.5 pts, 90.2% of gain); full A4 reached 71.1% (+3.2 pts).
+  * Paper swept $\beta, \gamma \in \{0.5, 1, 2, 3\}$ in Section 4.5, never testing the zero control ($\beta=0, \gamma=0$).
+* **Computation Cost vs. Return**:
+  * Disabling auxiliary TAP passes in Run D cuts training runtime by $\sim 15\%$ and reduces VRAM pressure.
+  * The extra training time and architectural complexity are not practically justified for a sub-noise return.
+  * In contrast, parameter-free PreciseBN delivers $+2.03\%$ on Run D and $+2.91\%$ on $F^2$ in $<2$ minutes.
 
 
 ---

@@ -107,9 +107,20 @@ To decouple the bi-modal input stream from the feature consistency module, we ex
     \Delta_{\text{total}} &= F - C = +21.41\text{ pts (100.0\%)} \\
     \Delta_{\text{dual}} &= D - C = 59.03 - 38.49 = \mathbf{+20.54\text{ pts (95.9\%)}} \\
     \Delta_{\text{feat}} &= F - D = 59.90 - 59.03 = \mathbf{+0.87\text{ pts (4.1\%)}}
-\textbf{Outcome \& Causal Scope}: These physical measurements unambiguously validate \textbf{Case C}: transitioning to the integrated dual-stream framework as a package accounts for 95.9\% of the observed improvement over single-stream FixMatch ($+20.54$ pts), while the feature-level consistency module delivers an incremental $+0.87\%$. Consequently, attributing the $+21.41\%$ leap primarily to P-Aug and MPL was an empirical misattribution.
+\end{align}
 
-Importantly, we emphasize that Run~D introduces the dual-stream configuration as an integrated package (bi-modal inputs, shared backbone parameterization, dual-branch supervised losses, cross-modal ensemble pseudo-labeling, and joint optimization dynamics). Our experiment rigorously establishes that this integrated package—rather than the feature consistency module—drives the performance jump, while leaving the finer-grained internal decomposition among individual sub-components (such as TG inputs alone vs. pseudo-label ensembling) as an open question for future work.
+\noindent \textbf{Outcome, Statistical Noise Margin \& Published Comparison}:  
+These physical measurements validate \textbf{Case C}: transitioning to the integrated dual-stream framework as a package accounts for 95.9\% of the observed improvement over single-stream FixMatch ($+20.54$ pts), while the feature-level consistency module delivers an incremental $+0.87\%$.
+
+Crucially, for $N = 3{,}783$ test videos at $p \approx 0.60$, the binomial standard error is $\mathrm{SE} = \sqrt{p(1-p)/N} \approx 0.80\%$, giving a 95\% margin of error of $1.96 \times \mathrm{SE} \approx \pm 1.56\%$. Because $\Delta_{\text{feat}} = +0.87\% < 1.56\%$, the feature module's contribution is \textbf{statistically indistinguishable from random evaluation noise} ($\sim 33$ test videos). We therefore refrain from claiming any confirmed benefit from P-Aug/MPL in this regime.
+
+This finding is further corroborated by the original paper's own ablation (Tu et al., Table~4): their frame-level dual-stream baseline (A1, without feature augmentations) achieved $67.9\%$, while the full model (A4) achieved $71.1\%$. In their data, dual-stream processing drove $+29.5$ pts (90.2\% of the total gain), with feature losses providing $+3.2$ pts. When the authors tuned $\beta$ and $\gamma$ (Section 4.5), they only swept non-zero values $\{0.5, 1, 2, 3\}$ and never evaluated the control $\beta = 0, \gamma = 0$.
+
+\noindent \textbf{Computational Overhead Trade-off}:  
+In addition to being statistically indistinguishable from noise, the feature-level module incurs substantial practical costs. In Full $F^2$-FixMatch, every unlabeled batch ($B_u = 16$) requires two additional forward passes through the TAP head (`forward_paug`) and two auxiliary backpropagation passes for $\mathcal{L}_u^{w_p}$ and $\mathcal{L}_u^{s_p}$. In our experiments, disabling these auxiliary passes (Run D) reduced per-epoch training time by $\sim 15\%$ and significantly decreased VRAM pressure. Given that the $+0.87\%$ gain lies inside the noise floor, this extra computational expense is not practically justified. By contrast, lightweight inference-time interventions such as PreciseBN recover $+2.03\%$ on Run D and $+2.91\%$ on $F^2$ in $< 2$ minutes with zero training overhead.
+
+\noindent \textbf{Causal Scope}:  
+Importantly, Run~D evaluates the dual-stream configuration as an integrated package (bi-modal inputs, shared backbone parameterization, dual-branch supervised losses, cross-modal ensemble pseudo-labeling, and joint optimization dynamics). Our experiment establishes that this integrated package—rather than the feature consistency module—drives the performance jump, while leaving the finer-grained internal decomposition among individual sub-components (such as TG inputs alone vs. pseudo-label ensembling) as an open question for future work.
 
 \subsection{Confidence Threshold Ablation: $\tau = 0.95$ vs. $0.30$}
 To resolve whether video SSL requires lower thresholds, we trained FixMatch RGB with the canonical image threshold $\tau = 0.95$:
