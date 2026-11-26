@@ -41,6 +41,11 @@ ref_*/
 
 # Large PDF documents
 *.pdf
+!docs/report.pdf
+!docs/P24_Proposal.pdf
+
+# Tools / Standalone Binaries
+tools/
 
 # Scratch, Dumped Logs, and Temporary Extraction Files
 scratch_*.txt
