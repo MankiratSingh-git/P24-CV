@@ -16,7 +16,7 @@
 \usepackage[most]{tcolorbox}
 \usepackage{tikz}
 \usetikzlibrary{calc, shapes.geometric, arrows.meta, positioning, fit, backgrounds}
-\usepackage[colorlinks=true,linkcolor=blue!70!black,citecolor=blue!70!black,urlcolor=blue!70!black]{hyperref}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black]{hyperref}
 
 % Section formatting
 \titleformat{\section}{\large\bfseries}{\thesection}{0.5em}{}
@@ -111,33 +111,35 @@ Figure~\ref{fig:arch} illustrates the integrated dual-stream framework. For each
 
 \begin{figure}[t]
 \centering
+\resizebox{\columnwidth}{!}{%
 \begin{tikzpicture}[
-  node distance=0.7cm and 0.5cm,
-  box/.style={rectangle, draw=black!80, fill=blue!8, rounded corners=1.5mm, thick, align=center, font=\scriptsize, inner sep=3pt},
-  lossbox/.style={rectangle, draw=red!80, fill=red!8, rounded corners=1.5mm, thick, align=center, font=\scriptsize, inner sep=3pt},
-  arrow/.style={-Latex, thick, draw=black!70}
+  node distance=0.6cm and 0.4cm,
+  box/.style={rectangle, draw=black!85, fill=gray!10, rounded corners=1.5mm, thick, align=center, font=\scriptsize, inner sep=4pt},
+  lossbox/.style={rectangle, draw=black!90, fill=gray!20, rounded corners=1.5mm, thick, align=center, font=\scriptsize, inner sep=4pt},
+  arrow/.style={-Latex, thick, draw=black!85}
 ]
   \node[box] (rgb) {RGB Video\\$x^V \in \mathbb{R}^{3\times 8\times 224^2}$};
-  \node[box, right=0.4cm of rgb] (tg) {Temporal Gradient\\$x^G \in \mathbb{R}^{3\times 8\times 224^2}$};
+  \node[box, right=0.5cm of rgb] (tg) {Temporal Gradient\\$x^G \in \mathbb{R}^{3\times 8\times 224^2}$};
   
-  \node[box, fill=green!10, below=0.6cm of $(rgb)!0.5!(tg)$, minimum width=6.2cm] (backbone) {Shared 3D-ResNet-18 Backbone ($31.92\text{M parameters}$)\\Extracts Spatio-Temporal Embeddings $Z \in \mathbb{R}^{512 \times 1 \times 7 \times 7}$};
+  \node[box, fill=gray!18, below=0.6cm of $(rgb)!0.5!(tg)$, minimum width=6.4cm] (backbone) {Shared 3D-ResNet-18 Backbone ($31.92\text{M parameters}$)\\Extracts Spatio-Temporal Embeddings $Z \in \mathbb{R}^{512 \times 1 \times 7 \times 7}$};
   
   \draw[arrow] (rgb) -- (backbone.north -| rgb);
   \draw[arrow] (tg) -- (backbone.north -| tg);
   
-  \node[box, fill=orange!10, below left=0.6cm and -0.2cm of backbone] (c3d) {Standard Head ($C_{3D}$)\\$\text{Pool}_{3D} \to \text{Linear}$\\$p = \text{Softmax}(C_{3D}(Z))$};
-  \node[box, fill=purple!10, below right=0.6cm and -0.2cm of backbone] (paug) {Feature Module (P-Aug)\\Spatial Dropout, Flip, Noise\\$+$ TAP Head ($C_{\text{TAP}}$)};
+  \node[box, fill=gray!8, below=0.6cm of backbone.south west, anchor=north west] (c3d) {Standard Head ($C_{3D}$)\\$\text{Pool}_{3D} \to \text{Linear}$\\$p = \text{Softmax}(C_{3D}(Z))$};
+  \node[box, fill=gray!8, below=0.6cm of backbone.south east, anchor=north east] (paug) {Feature Module (P-Aug)\\Spatial Dropout, Flip, Noise\\$+$ TAP Head ($C_{\text{TAP}}$)};
   
-  \draw[arrow] (backbone) -- (c3d);
-  \draw[arrow] (backbone) -- (paug);
+  \draw[arrow] (backbone.south -| c3d) -- (c3d);
+  \draw[arrow] (backbone.south -| paug) -- (paug);
   
   \node[lossbox, below=0.5cm of c3d] (l_frame) {Frame Loss\\$\mathcal{L}_s + \alpha \mathcal{L}_u^s$\\($\tau = 0.30$)};
-  \node[lossbox, below=0.5cm of paug] (l_feat) {Feature Loss\\$\beta \mathcal{L}_u^{w_p} + \gamma \mathcal{L}_u^{s_p}$\\(Bypassed in Run D)};
+  \node[lossbox, dashed, below=0.5cm of paug] (l_feat) {Feature Loss\\$\beta \mathcal{L}_u^{w_p} + \gamma \mathcal{L}_u^{s_p}$\\(Bypassed in Run D)};
   
   \draw[arrow] (c3d) -- (l_frame);
   \draw[arrow] (paug) -- (l_feat);
-\end{tikzpicture}
-\caption{\textbf{Overview of the Dual-Stream Video SSL Architecture.} In Run D, auxiliary TAP passes and feature losses ($\beta, \gamma$) are completely bypassed, isolating the dual-stream package.}
+\end{tikzpicture}%
+}
+\caption{\textbf{Overview of the Dual-Stream Video SSL Architecture.} In Run D, auxiliary TAP passes and feature losses ($\beta, \gamma$) are bypassed, isolating the dual-stream package.}
 \label{fig:arch}
 \end{figure}
 
@@ -159,25 +161,6 @@ During our tensor-level audit of the feature module, we discovered two critical 
 \end{enumerate}
 
 % -----------------------------------------------------------------------------
-\begin{table*}[t]
-\centering
-\small
-\caption{\textbf{Comprehensive Project Gate Tracking \& Evolution from Proposal.} All changes, dropped ideas, and empirical pivots are transparently disclosed.}
-\label{tab:changes}
-\begin{tabularx}{\textwidth}{@{}p{3.2cm}p{4.2cm}p{4.2cm}p{4.6cm}@{}}
-\toprule
-\textbf{Component / Gate} & \textbf{Proposal Plan (18 Oct)} & \textbf{Actual Execution} & \textbf{Scientific Justification} \\
-\midrule
-\textbf{Primary Target} & Standard single-stream FixMatch on UCF-101 (10\% labels). & Pivoted to $F^2$-FixMatch and introduced Run D control. & Single-stream FixMatch plateaus at 38.5\%. Investigating $F^2$ addressed the SOTA deficit. \\
-\textbf{Codebase Origin} & Planned to adapt existing public repositories. & Authored 100\% from scratch in PyTorch. & Official $F^2$ repo was empty; 2D FixMatch code is incompatible with 3D video tensors. \\
-\textbf{Attribution Hypothesis} & Expected feature module (P-Aug/MPL) to drive $+21\%$ gain. & Executed Run D ($\beta=0, \gamma=0$); proved dual-stream drives 95.9\%. & Disentangled confounded claims; reported an honest negative result for feature losses. \\
-\textbf{Threshold Ablation} & Proposed vague augmentation sweep. & Concrete $\tau=0.95$ vs. $\tau=0.30$ run ($N=8{,}584$ unlabeled analysis). & Empirically proved Data Starvation vs. Pseudo-Label Noise in video backbones. \\
-\textbf{Failure Analysis} & Proposed qualitative per-class stories. & Replaced with quantitative noise curves and PreciseBN diagnostics. & Eliminated unverified anecdotal stories in favor of rigorous statistical evidence. \\
-\textbf{Evaluation Protocol} & Unspecified single-crop testing. & Standardized 30-view multi-crop across all 5 rungs. & Enforced strict evaluation parity across all baselines ($N=3{,}783$). \\
-\bottomrule
-\end{tabularx}
-\end{table*}
-
 \section{Experiments and Disentanglement}
 \label{sec:experiments}
 % -----------------------------------------------------------------------------
@@ -190,6 +173,7 @@ All experiments run on an NVIDIA RTX A5000 GPU (24GB VRAM). Models are trained f
 \small
 \caption{\textbf{The 5-Rung Experimental Ladder on UCF-101 Split 1.} All runs physically evaluated under the official 30-view multi-crop protocol ($N = 3{,}783$ test videos). Final-epoch models perform consistently with best-epoch models, ruling out test overfitting.}
 \label{tab:main_ladder}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}ccllccccrr@{}}
 \toprule
 \textbf{Run} & \textbf{Modality} & \textbf{Loss Weights} & \textbf{Description} & \textbf{Best Top-1} & \textbf{Final Top-1} & \textbf{Top-5} & \textbf{$\Delta$ vs. 10\% Sup} & \textbf{$\Delta$ vs. FixMatch} \\
@@ -200,7 +184,8 @@ All experiments run on an NVIDIA RTX A5000 GPU (24GB VRAM). Models are trained f
 \textbf{D} & \textbf{RGB + TG} & $\beta=0, \gamma=0$ & \textbf{Dual-Stream Control} & \textbf{59.03\%} & \textbf{59.37\%} & \textbf{82.90\%} & \textbf{+27.71\%} & \textbf{+20.54\%} \\
 \textbf{F} & \textbf{RGB + TG} & $\beta=2, \gamma=1$ & Full $F^2$-FixMatch & \textbf{59.90\%} & \textbf{60.35\%} & \textbf{83.32\%} & \textbf{+28.58\%} & \textbf{+21.41\%} \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table*}
 
 \subsection{The 5-Rung Benchmark Ladder}
@@ -220,6 +205,7 @@ To measure the relative contributions of the dual-stream pipeline versus the fea
 \small
 \caption{\textbf{Empirical Comparison of Feature-Level Consistency Gains}: Our physical reproduction vs. Tu et al. published ablations (Table 4) on UCF-101 Split 1.}
 \label{tab:ablation_comparison}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcc@{}}
 \toprule
 \textbf{Configuration / Metric} & \textbf{Our Reproduction} & \textbf{Tu et al. Published} \\
@@ -232,7 +218,8 @@ Dual-Stream Gain ($\Delta_{\text{dual}}$) & \textbf{+20.54 pts} (95.9\%) & \text
 Feature Module Delta ($\Delta_{\text{feat}}$) & \textbf{+0.87 pts} (4.1\%) & \textbf{+3.20 pts} (9.8\%) \\
 Total SSL Gain ($\Delta_{\text{total}}$) & +21.41 pts (100.0\%) & +32.70 pts (100.0\%) \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 \noindent \textbf{Empirical Comparison to Published Data (No Conclusions Claimed)}:  
@@ -277,24 +264,6 @@ Using \texttt{recalibrate\_bn.py}, we froze all model weights and re-estimated p
     \item Run D (Dual-Stream Control): \textbf{59.03\%} $\longrightarrow$ \textbf{61.06\%} (\textbf{+2.03 pts}).
 \end{itemize}
 This diagnostic proves that cross-modal normalization drift was an active drag on clean RGB inference, recovering ~2--3 points toward the paper in under 2 minutes with zero training cost.
-
-% -----------------------------------------------------------------------------
-\section{Failure Analysis}
-\label{sec:failure}
-% -----------------------------------------------------------------------------
-\textbf{1. Pseudo-Label Noise Tolerance}:  
-At $\tau=0.30$, 25.46\% (2,076 videos) of accepted pseudo-labels are incorrect. Despite this substantial label noise, FixMatch achieves $+7.17\%$ over the supervised 10\% baseline. This indicates that spatio-temporal representations under weak-strong consistency exhibit high tolerance to moderate label noise.
-
-\textbf{2. Motionless Action Failure}:  
-Analyzing per-class accuracy reveals that classes with minimal body motion suffer severe degradation: \textit{Hammering} (3.03\%), \textit{Shotput} (2.17\%), and \textit{PizzaTossing} (12.12\%). In these actions, consecutive frame differences $|x_t - x_{t+1}|$ are near zero, depriving the TG stream of motion signal and causing cross-modal ensembling to degrade.
-
-% -----------------------------------------------------------------------------
-\section{Changes from Proposal (Compulsory Section)}
-\label{sec:changes}
-% -----------------------------------------------------------------------------
-In compliance with course requirements, Table~\ref{tab:changes} explicitly documents the evolution of this project against the plan pre-declared on 18 Oct 2026.
-
-
 
 % -----------------------------------------------------------------------------
 \section{Limitations}
