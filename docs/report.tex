@@ -222,7 +222,7 @@ Total SSL Gain ($\Delta_{\text{total}}$) & +21.41 pts (100.0\%) & +32.70 pts (10
 }
 \end{table}
 
-\noindent \textbf{Empirical Comparison to Published Data (No Conclusions Claimed)}:  
+\noindent \textbf{Empirical Comparison to Published Data}:  
 Table~\ref{tab:ablation_comparison} presents a direct side-by-side comparison between our measured physical results and the published ablations reported in Tu et al.~\cite{tu2025f2fixmatch} (Table 4).
 \begin{itemize}
     \item In the published results, introducing the feature consistency module (A4 vs. A1) corresponds to a \textbf{+3.20 point} delta ($67.9\% \to 71.1\%$), representing 9.8\% of their total semi-supervised improvement over single-stream FixMatch.
@@ -272,7 +272,7 @@ This diagnostic proves that cross-modal normalization drift was an active drag o
 \begin{enumerate}
     \item \textbf{Residual Performance Gap}: While PreciseBN narrows the gap to published results by $+2.91\%$, an $\sim 8$-point gap remains to the paper's 71.1\%. This gap likely reflects unreleased distributed batch scaling details (multi-GPU aggregate batches vs. our single-GPU setup).
     \item \textbf{Single-Seed Budget}: Due to computational budget constraints ($\sim 100$ GPU hours on an RTX A5000), runs were executed under a single random seed (seed 42).
-    \item \textbf{Internal Dual-Stream Decomposition}: Run D evaluates the dual-stream framework as an integrated package. Isolating TG inputs alone from ensemble pseudo-labeling remains an open question.
+    \item \textbf{Feature Module Margin vs. Noise}: While our reproduction measures a $+0.87\%$ incremental gain from the feature-level consistency module (compared to $+3.20\%$ reported in the paper), this magnitude falls within the $\pm 1.56\%$ binomial evaluation margin on $N=3{,}783$ test videos. Consequently, it remains open whether the observed $+0.87\%$ difference reflects a modest auxiliary regularization effect or finite-sample evaluation variance.
 \end{enumerate}
 
 % -----------------------------------------------------------------------------
