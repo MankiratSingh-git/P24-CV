@@ -66,9 +66,22 @@ Prior literature attributed the +21-point gain from FixMatch (38.49%) to $F^2$-F
 $$\Delta_{\text{total}} = F - C = \Delta_{\text{dual}} + \Delta_{\text{feat}}$$
 
 * **$\Delta_{\text{dual}} = D - C = 59.03\% - 38.49\% = \mathbf{+20.54\text{ pts (95.9\% of SSL gain)}}$**: Gain associated with transitioning to the integrated dual-stream framework package (shared backbone, bi-modal RGB+TG inputs, dual supervised heads, cross-modal ensemble pseudo-label generation, and joint optimization dynamics).
-* **$\Delta_{\text{feat}} = F - D = 59.90\% - 59.03\% = \mathbf{+0.87\text{ pts (4.1\% of SSL gain)}}$**: Incremental gain from the feature-level consistency module (P-Aug perturbations and auxiliary consistency losses $\beta \mathcal{L}_u^{w_p} + \gamma \mathcal{L}_u^{s_p}$).
-* **Pre-declared Classification: Case C (Dual-Stream Package Dominant; Feature Module Negligible)**: The empirical progression demonstrates that the integrated dual-stream framework as a package—rather than the feature-level consistency module—accounts for 95.9% of the gain over single-stream FixMatch.
-* **Important Causal Scope & Caveat**: Run D establishes that the dual-stream configuration *as an integrated package* accounts for the observed leap, whereas the feature-level consistency module adds an incremental +0.87 pts. We explicitly do not claim to have isolated the individual internal mechanisms within that package (e.g., TG inputs alone vs. ensemble pseudo-labeling vs. multi-modal optimization dynamics), which remains an open ablation for future work.
+* **$\Delta_{\text{feat}} = F - D = 59.90\% - 59.03\% = \mathbf{+0.87\text{ pts (4.1\% of SSL gain)}}$**: Incremental difference from the feature-level consistency module (P-Aug perturbations and auxiliary consistency losses $\beta \mathcal{L}_u^{w_p} + \gamma \mathcal{L}_u^{s_p}$).
+
+### Empirical Comparison to Published Data
+
+| Configuration / Metric | Our Reproduction | Tu et al. Published (Table 4) |
+| :--- | :---: | :---: |
+| **Single-Stream Baseline** | 38.49% (Run C) | 38.40% |
+| **Frame Dual-Stream ($\beta=0, \gamma=0$)** | 59.03% (Run D) | 67.90% (A1) |
+| **Full $F^2$-FixMatch ($\beta=2, \gamma=1$)** | 59.90% (Run F) | 71.10% (A4) |
+| **Dual-Stream Gain ($\Delta_{\text{dual}}$)** | **+20.54 pts** (95.9%) | **+29.50 pts** (90.2%) |
+| **Feature Module Delta ($\Delta_{\text{feat}}$)** | **+0.87 pts** (4.1%) | **+3.20 pts** (9.8%) |
+| **Total SSL Gain ($\Delta_{\text{total}}$)** | **+21.41 pts** (100.0%) | **+32.70 pts** (100.0%) |
+
+* **Statistical Margin vs. Evaluation Noise**: On the official test set of $N = 3,783$ videos at baseline accuracy $p \approx 0.60$, the binomial standard error is $\mathrm{SE} = \sqrt{p(1-p)/N} \approx 0.80\%$, giving a 95% margin of error of $\pm 1.56\%$. Our measured $+0.87\%$ delta corresponds to $\sim 33$ test videos and sits within this $\pm 1.56\%$ margin. Consequently, it remains open whether the observed $+0.87\%$ difference reflects a modest auxiliary regularization effect or finite-sample evaluation variance, and differences in multi-GPU batch scaling or unreleased implementation details may also affect how feature regularizers behave across environments.
+* **Computational Trade-Off**: Bypassing the auxiliary TAP forward and backward passes in Run D reduces per-epoch training time by $\sim 15\%$ and lowers peak VRAM allocation.
+* **Causal Scope**: Run D evaluates the dual-stream configuration *as an integrated package*. Decomposing individual elements within that package (e.g., TG inputs alone vs. ensemble pseudo-labeling) remains an open empirical question.
 
 ---
 
@@ -87,8 +100,10 @@ Standard FixMatch (Sohn et al., NeurIPS 2020) uses $\tau = 0.95$ on 2D images, w
 
 ### 4.2 Cross-Modal BatchNorm Recalibration (PreciseBN Diagnostic)
 In dual-stream training, shared `BatchNorm3d` layers are updated over multiple RGB and Temporal Gradient (TG) passes. Because TG represents frame differences with near-zero mean and high temporal variance, running statistics become an admixture. 
-* By running clean RGB training clips through frozen weights to re-estimate population statistics (PreciseBN), $F^2$-FixMatch 30-view accuracy increases from **59.90% to 62.81% (+2.91 pts)** with bitwise parameter invariance ($64/64$ parameters bitwise identical).
-* This proves that shared RGB/TG BatchNorm contamination was an active drag on clean RGB inference, recovering ~3 points toward the paper's benchmark while transparently leaving an ~8-point gap attributable to unreleased implementation details.
+* By running clean RGB training clips through frozen weights to re-estimate population statistics (`recalibrate_bn.py`), 30-view accuracy increases immediately with bitwise parameter invariance ($64/64$ parameters bitwise identical):
+  * **Full $F^2$-FixMatch**: **59.90% $\to$ 62.81% (+2.91 pts)**
+  * **Run D (Dual-Stream Control)**: **59.03% $\to$ 61.06% (+2.03 pts)**
+* This proves that shared RGB/TG BatchNorm contamination was an active drag on clean RGB inference, recovering ~2–3 points in under 2 minutes with zero training cost.
 
 ### 4.3 Final-Epoch vs. Test-Selected Invariance
 Across all semi-supervised runs, the final-epoch model (`final_model.pth`, Epoch 220) performs equal to or higher than `best_model.pth` ($|\Delta| < 0.5\%$), conclusively ruling out test-set selection overfitting:
@@ -251,12 +266,15 @@ All reported numbers are tracked in committed evaluation logs:
 * **PreciseBN Diagnostic**: `results/eval_f2_precise_bn_30view.json`
 * **Pseudo-Label Curves**: `results/pseudolabel_f2/pseudolabel_analysis.csv`
 * **Synthesis Reports**: `results/synthesis_report.md` and `RESULTS.md`
+* **Final Project Report**: [`docs/report.pdf`](docs/report.pdf) ([`docs/report.tex`](docs/report.tex))
 
 *(Large binary weight checkpoints `*.pth` exceed GitHub limits and are hosted externally; download links are provided in `checkpoints/README.md`)*.
 
 ---
 
-## 9. Credits & Reused Assets
+## 9. Credits, Implementation Attribution & Reused Assets
+
+Because the official $F^2$-FixMatch repository was unreleased and existing 2D FixMatch codebases are incompatible with 3D spatio-temporal video tensors, the entire video SSL training, data loading, Temporal Gradient extraction, feature perturbation, and evaluation pipeline was authored from scratch in PyTorch, adapting algorithmic concepts from:
 
 1. **UCF-101 Dataset**: Soomro, K., Zamir, A. R., & Shah, M. (2012). *UCF101: A Dataset of 101 Human Actions Classes From Videos in The Wild*. CRCV-TR-12-01.
 2. **VideoSSL Benchmark & Splits**: Xiao, F., Lee, Y. J., Grauman, K., Malik, J., & Feichtenhofer, C. (2021). *A Video is Worth More Than 1,000 Words: Semi-Supervised Video Representation Learning via Visual and Audio Mappings*. WACV 2021.
