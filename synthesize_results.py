@@ -379,13 +379,12 @@ Disentanglement Breakdown of Gain over FixMatch-RGB ({attributions['delta_total'
    * On the official UCF-101 Split 1 test set ($N = 3,783$ videos) at baseline accuracy $p \\approx 0.60$:
      $$\\text{{Standard Error (SE)}} = \\sqrt{{\\frac{{p(1-p)}}{{N}}}} = \\sqrt{{\\frac{{0.60 \\times 0.40}}{{3,783}}}} \\approx 0.796\\% \\approx 0.80\\%$$
      $$\\text{{95\\% Margin of Error}} = 1.96 \\times \\text{{SE}} \\approx \\pm 1.56\\%$$
-   * Because the observed empirical difference between Run F and Run D ($\\Delta_{{\\text{{feat}}}} = +0.87\\%$) is substantially smaller than $\\pm 1.56\\%$, it corresponds to just $\\sim 33$ test videos out of 3,783.
-   * **Scientific Conclusion**: The $+0.87\\%$ difference is **statistically indistinguishable from random evaluation noise**. We therefore refrain from claiming that P-Aug and MPL provide a confirmed empirical benefit in this regime.
+   * Because the observed empirical difference between Run F and Run D ($\\Delta_{{\\text{{feat}}}} = +0.87\\%$) is smaller than $\\pm 1.56\\%$, it corresponds to $\\sim 33$ test videos out of 3,783.
+   * **Statistical Context**: Because $+0.87\\%$ lies within the $\\pm 1.56\\%$ evaluation margin, it remains open whether the observed difference reflects a modest auxiliary regularization effect or finite-sample evaluation variance. Differences in distributed batch scaling or unreleased implementation subtleties may also affect how feature regularizers behave across environments.
 
 3. **Computational Overhead and Efficiency Trade-off**:
    * In Full $F^2$-FixMatch, every unlabeled batch ($B_u = 16, \\mu = 4$) must pass weak and strong perturbed features through the spatial perturbator and the Temporal Attention Pooling (TAP) head (`forward_paug`), followed by two additional backward passes for $\\mathcal{{L}}_u^{{w_p}}$ and $\\mathcal{{L}}_u^{{s_p}}$.
-   * In Run D ($\\beta=0, \\gamma=0$), these passes are completely bypassed, reducing per-epoch training latency by $\\sim 15\\%$ and lowering VRAM requirements.
-   * Given that the empirical return ($+0.87\\%$) is within the statistical noise floor, **the extra computational time and memory overhead of the feature-level module are not practically justified**.
+   * In Run D ($\\beta=0, \\gamma=0$), these passes are bypassed, reducing per-epoch training latency by $\\sim 15\\%$ and lowering VRAM requirements.
    * In contrast, parameter-free inference recalibration (PreciseBN) delivers $+2.03\\%$ on Run D and $+2.91\\%$ on $F^2$ in $< 2$ minutes with zero additional training cost.
 
 ---
@@ -534,13 +533,12 @@ def format_results_section_4(
    * On the official UCF-101 Split 1 test set ($N = 3,783$ videos) at baseline accuracy $p \\approx 0.60$:
      $$\\text{{Standard Error (SE)}} = \\sqrt{{\\frac{{p(1-p)}}{{N}}}} = \\sqrt{{\\frac{{0.60 \\times 0.40}}{{3,783}}}} \\approx 0.796\\% \\approx 0.80\\%$$
      $$\\text{{95\\% Margin of Error}} = 1.96 \\times \\text{{SE}} \\approx \\pm 1.56\\%$$
-   * Because the observed empirical difference between Run F and Run D ($\\Delta_{{\\text{{feat}}}} = +0.87\\%$) is substantially smaller than $\\pm 1.56\\%$, it corresponds to just $\\sim 33$ test videos out of 3,783.
-   * **Scientific Conclusion**: The $+0.87\\%$ difference is **statistically indistinguishable from random evaluation noise**. We therefore refrain from claiming that P-Aug and MPL provide a confirmed empirical benefit in this regime.
+   * Because the observed empirical difference between Run F and Run D ($\\Delta_{{\\text{{feat}}}} = +0.87\\%$) is smaller than $\\pm 1.56\\%$, it corresponds to $\\sim 33$ test videos out of 3,783.
+   * **Statistical Context**: Because $+0.87\\%$ lies within the $\\pm 1.56\\%$ evaluation margin, it remains open whether the observed difference reflects a modest auxiliary regularization effect or finite-sample evaluation variance. Differences in distributed batch scaling or unreleased implementation subtleties may also affect how feature regularizers behave across environments.
 
 3. **Computational Overhead and Efficiency Trade-off**:
    * In Full $F^2$-FixMatch, every unlabeled batch ($B_u = 16, \\mu = 4$) must pass weak and strong perturbed features through the spatial perturbator and the Temporal Attention Pooling (TAP) head (`forward_paug`), followed by two additional backward passes for $\\mathcal{{L}}_u^{{w_p}}$ and $\\mathcal{{L}}_u^{{s_p}}$.
-   * In Run D ($\\beta=0, \\gamma=0$), these passes are completely bypassed, reducing per-epoch training latency by $\\sim 15\\%$ and lowering VRAM requirements.
-   * Given that the empirical return ($+0.87\\%$) is within the statistical noise floor, **the extra computational time and memory overhead of the feature-level module are not practically justified**.
+   * In Run D ($\\beta=0, \\gamma=0$), these passes are bypassed, reducing per-epoch training latency by $\\sim 15\\%$ and lowering VRAM requirements.
    * In contrast, parameter-free inference recalibration (PreciseBN) delivers $+2.03\\%$ on Run D and $+2.91\\%$ on $F^2$ in $< 2$ minutes with zero additional training cost.
 
 ### 4.3 Pre-Declared Outcome Classification: {classification['case_id']} ({classification['title']})

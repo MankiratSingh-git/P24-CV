@@ -32,7 +32,7 @@ All evaluation results are reported under transparent, unmixed evaluation modes:
 | **Supervised Baseline (10%)** | 10% | RGB | Standard RandomCrop + HorizontalFlip | **31.32%** | **54.11%** | *Reference* | — | Test-selected historical |
 | **FixMatch Baseline** | 10% | RGB | Weak/Strong (RandAug + Cutout, $\tau=0.3$) | **38.49%** | **64.00%** | **+7.17%** | *Reference* | Test-selected historical |
 | **$F^2$-FixMatch** | 10% | **RGB + TG** | **Dual-Stream + Feature-Level Module (P-Aug & MPL)** | **59.90%** | **83.32%** | **+28.58%** | **+21.41%** | Test-selected historical |
-| **Supervised Reference (100%)** | 100% | RGB | Full Training Set (9,537 videos, 120 ep) | *Pending 30-view audit* | *Pending 30-view audit* | — | — | Phase 2 Audit |
+| **Supervised Reference (100%)** | 100% | RGB | Full Training Set (9,537 videos, 120 ep) | **72.91%** | **90.06%** | **+41.59%** | **+34.42%** | Matched 30-View Test |
 
 ```
 Top-1 Accuracy (30-View Multi-Crop):
@@ -50,7 +50,7 @@ F²-FixMatch (10%): [███████████████████�
 | **Supervised Reference (10%)** | ~25.4% | **31.32%** | Supervised baseline exceeds paper reference (+5.92%) |
 | **FixMatch Baseline (10%)** | 51.7% (Table 5) | **38.49%** | Single-stream RGB baseline without temporal gradients |
 | **$F^2$-FixMatch (10%)** | **71.1%** (Table 3) | **59.90%** | **+28.58% absolute gain** over 10% supervised; **+21.41%** over FixMatch |
-| **Supervised Reference (100%)** | ~70% – 73% | **71.69%** (1-crop) | Consistent with standard 3D-ResNet-18 supervised performance on UCF-101 |
+| **Supervised Reference (100%)** | ~70% – 73% | **72.91%** (30-view) | Consistent with standard 3D-ResNet-18 supervised performance on UCF-101 |
 | **Top-5 Accuracy ($F^2$-FixMatch)** | Not reported | **83.32%** | Ground-truth action in top-5 for over 5 out of 6 test videos |
 | **Pseudo-Label Mask Coverage** | ~90% – 95% | **95.22%** | Matches paper Section 4.5 dynamics with $\tau = 0.3$ |
 
@@ -125,13 +125,12 @@ Our single-GPU reproduction achieves **59.90%** on the official 30-view protocol
    * On the official UCF-101 Split 1 test set ($N = 3,783$ videos) at baseline accuracy $p \approx 0.60$:
      $$\text{Standard Error (SE)} = \sqrt{\frac{p(1-p)}{N}} = \sqrt{\frac{0.60 \times 0.40}{3,783}} \approx 0.796\% \approx 0.80\%$$
      $$\text{95\% Margin of Error} = 1.96 \times \text{SE} \approx \pm 1.56\%$$
-   * Because the observed empirical difference between Run F and Run D ($\Delta_{\text{feat}} = +0.87\%$) is substantially smaller than $\pm 1.56\%$, it corresponds to just $\sim 33$ test videos out of 3,783.
-   * **Scientific Conclusion**: The $+0.87\%$ difference is **statistically indistinguishable from random evaluation noise**. We therefore refrain from claiming that P-Aug and MPL provide a confirmed empirical benefit in this regime.
+   * Because the observed empirical difference between Run F and Run D ($\Delta_{\text{feat}} = +0.87\%$) is smaller than $\pm 1.56\%$, it corresponds to $\sim 33$ test videos out of 3,783.
+   * **Statistical Context**: Because $+0.87\%$ lies within the $\pm 1.56\%$ evaluation margin, it remains open whether the observed difference reflects a modest auxiliary regularization effect or finite-sample evaluation variance. Differences in distributed batch scaling or unreleased implementation subtleties may also affect how feature regularizers behave across environments.
 
 3. **Computational Overhead and Efficiency Trade-off**:
    * In Full $F^2$-FixMatch, every unlabeled batch ($B_u = 16, \mu = 4$) must pass weak and strong perturbed features through the spatial perturbator and the Temporal Attention Pooling (TAP) head (`forward_paug`), followed by two additional backward passes for $\mathcal{L}_u^{w_p}$ and $\mathcal{L}_u^{s_p}$.
-   * In Run D ($\beta=0, \gamma=0$), these passes are completely bypassed, reducing per-epoch training latency by $\sim 15\%$ and lowering VRAM requirements.
-   * Given that the empirical return ($+0.87\%$) is within the statistical noise floor, **the extra computational time and memory overhead of the feature-level module are not practically justified**.
+   * In Run D ($\beta=0, \gamma=0$), these passes are bypassed, reducing per-epoch training latency by $\sim 15\%$ and lowering VRAM requirements.
    * In contrast, parameter-free inference recalibration (PreciseBN) delivers $+2.03\%$ on Run D and $+2.91\%$ on $F^2$ in $< 2$ minutes with zero additional training cost.
 
 ### 4.3 Pre-Declared Outcome Classification: Case C (Dual-Stream Package Dominant; Feature Module Negligible)

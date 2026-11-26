@@ -9,9 +9,13 @@ Video action recognition requires extracting dynamic spatial and temporal featur
 To systematically evaluate the benefit of unlabeled video data, this repository formulates and reproduces three core tiers alongside an oracle upper bound:
 
 1. **Supervised Baseline (10% Labels Only)**: Trained exclusively on the 953 labeled videos with standard cross-entropy loss, establishing the lower-bound reference.
-2. **FixMatch Baseline (Single-Stream RGB)**: Adapts consistency-based pseudo-labeling (Sohn et al., NeurIPS 2020) to 3D video recognition using weak-to-strong spatial augmentations (RandAugment + Cutout) and confidence thresholding ($\tau = 0.3$).
-3. **$F^2$-FixMatch (Full Framework)**: State-of-the-art semi-supervised video framework (Tu et al., ACM TOMM 2025) integrating bi-modal representations (RGB + dynamic Temporal Gradient), **Frame-Level FixMatch**, and a unified **Feature-Level Consistency Module (P-Aug + MPL)** with decoupled classification heads.
-4. **Supervised Upper Bound (Oracle, 100% Labels)**: Full-supervision ceiling trained across all 9,537 annotated videos.
+2. **FixMatch Baseline (Single-Stream RGB)**: Adapts consistency-based pseudo-labeling (Sohn et al., NeurIPS 2020) to 3D video recognition using weak-to-strong spatial augmentations (RandAugment + Cutout) and confidence thresholding ($\tau = 0.30$ canonical, plus $\tau = 0.95$ in Run C-$\tau$ to test data starvation).
+3. **Dual-Stream Control (Run D, $\beta=0, \gamma=0$)**: Runs RGB + Temporal Gradient dual-stream FixMatch with feature-level consistency losses disabled to isolate the dual-stream package from the feature module.
+4. **$F^2$-FixMatch (Full Framework)**: State-of-the-art semi-supervised video framework (Tu et al., ACM TOMM 2025) integrating bi-modal representations (RGB + dynamic Temporal Gradient), **Frame-Level FixMatch**, and a unified **Feature-Level Consistency Module (P-Aug + MPL)** with decoupled classification heads.
+5. **Supervised Upper Bound (Oracle, 100% Labels)**: Full-supervision ceiling trained across all 9,537 annotated videos.
+
+> **Implementation Attribution (Authored From Scratch)**:  
+> Because the official $F^2$-FixMatch repository was unreleased and existing 2D FixMatch codebases are structurally incompatible with 5D spatio-temporal video tensors ($B \times C \times T \times H \times W$), the entire video SSL pipeline—including video dataloaders, online Temporal Gradient extraction, shared 3D-ResNet-18 backbone, feature perturbators, multi-term loss engine, PreciseBN recalibration (`recalibrate_bn.py`), and 30-view evaluation—was implemented from scratch in PyTorch while adapting augmentation and pseudo-labeling concepts from VideoSSL and FixMatch.
 
 ---
 
