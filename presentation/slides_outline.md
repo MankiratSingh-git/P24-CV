@@ -1,116 +1,102 @@
-# Slide Deck: Scientific Disentanglement of $F^2$-FixMatch on UCF-101
-**Course**: CS-UCS532 Open Challenge Final Presentation (Team P24)  
-**Format**: 10 Slides | 10 Min Presentation + 5 Min Q&A | Large Typography (24 pt+ style) | Bullets Only
+# Presentation Slide Outline (9 Slides — Concise, Table & Bullet Format)
+
+> **Design Note**: Keep slides uncluttered ($\ge 24\text{pt}$ body text, max 4–5 short bullets or 1 compact table per slide). All numbers match [`docs/report.pdf`](../docs/report.pdf) and [`README.md`](../README.md).
 
 ---
 
-## Slide 1: Problem & Motivation
-* **Semi-Supervised Action Recognition**: Video annotation is prohibitively expensive; how to leverage 90% unannotated video?
-* **Benchmark Challenge**: UCF-101 Split 1 with strictly 10% labeled data (953 labeled videos, ~9.4 per class) and 90% unlabeled data (8,584 videos).
-* **Backbone Architecture**: 3D-ResNet-18 (31.92M parameters), 8-frame clips, stride 8, $224 \times 224$ resolution.
-* **The Claim Under Scrutiny**: $F^2$-FixMatch reports +21.41% over standard FixMatch, attributing the leap to feature-level consistency (P-Aug + MPL).
+## Slide 1: Title Slide
+* **Title**: Disentangling & Auditing Semi-Supervised Action Recognition ($F^2$-FixMatch on UCF-101)
+* **Course**: CS-UCS532: Computer Vision | **Problem ID**: P24
+* **Team Members**:
+  * **Mankirat Singh** (`1024160002`)
+  * **Vanshika Garg** (`1024030092`)
+* **Repository**: `github.com/MankiratSingh-git/P24-CV` (`bash run_all.sh` / `run_all.bat`)
 
 ---
 
-## Slide 2: The Baseline & The Attribution Gap
-* **Supervised 10% Baseline**: Reaches **31.32%** Top-1 (30-view evaluation).
-* **FixMatch RGB Baseline**: Reaches **38.49%** Top-1 (+7.17% gain from unlabeled video).
-* **$F^2$-FixMatch**: Reaches **59.90%** Top-1 (+21.41% over FixMatch RGB).
-* **The Missing Control**: $F^2$-FixMatch introduced Temporal Gradients (TG), dual heads, ensembling, and feature losses simultaneously.
-* **The Question**: How much of the +21.41% comes from the multi-modal dual-stream input vs. the feature-level consistency module?
+## Slide 2: Problem Statement & Strategic Pivot
+| Parameter | Specification |
+| :--- | :--- |
+| **Dataset** | UCF-101 Split 1 (101 action classes) |
+| **Data Split** | 953 Labeled (10%) / 8,584 Unlabeled (90%) / 3,783 Test |
+| **Backbone & Input** | 3D-ResNet-18 (31.92M params), 8 frames (stride 8, $224\times 224$) |
+| **Evaluation Protocol** | Matched 30-view multi-crop ($10\text{ clips} \times 3\text{ crops}$, $256\times 256$) |
+
+* **Why We Pivoted**: Initial proposal targeted standard FixMatch (38.49% Top-1); we pivoted to $F^2$-FixMatch (claimed 71.1%) to audit state-of-the-art claims.
 
 ---
 
-## Slide 3: Method & System Architecture
-* **Input Modality Level**:
-  * RGB Stream: Raw appearance frames ($x^V$).
-  * Temporal Gradient Stream: Frame differences ($x_t^G = (x_t^V - x_{t+1}^V + 255) / 2$).
-* **Frame-Level Dual Stream**:
-  * Shared 3D-ResNet-18 backbone extracts representations for both RGB and TG.
-  * Ensemble pseudo-labeling: $p_w = \frac{1}{2}(p_w^{\text{RGB}} + p_w^{\text{TG}})$ filtered by $\tau = 0.30$.
-* **Feature-Level Consistency Module**:
-  * Progressive Augmentations (P-Aug) on Temporal Average Pooled (TAP) features.
-  * Auxiliary consistency losses: $\beta \mathcal{L}_u^{w_p} + \gamma \mathcal{L}_u^{s_p}$.
+## Slide 3: From-Scratch Implementation & Architecture
+* **Why Authored From Scratch**: Official $F^2$-FixMatch repo was empty; 2D FixMatch codebases are incompatible with 5D video tensors ($B \times C \times T \times H \times W$).
+
+| Authored From Scratch (PyTorch) | Reused / Adapted Concepts |
+| :--- | :--- |
+| Video loaders, 30-view evaluator, online TG extractor | Weak/strong augmentation definitions (VideoSSL) |
+| Shared 3D-ResNet-18 + $C_{3D}$ & $C_{\text{TAP}}$ heads | Confidence-masked pseudo-labeling logic (FixMatch) |
+| P-Aug perturbators, multi-term loss, Run D control, PreciseBN | Official UCF-101 Split 1 train/val lists |
+
+* **Pipeline**: `RGB + TG` $\to$ `Shared 3D-ResNet-18` $\to$ `Ensemble Pseudo-Label (tau=0.30)` $\to$ `Frame Loss` $+$ `TAP Feature Loss (Bypassed in Run D)`.
 
 ---
 
-## Slide 4: Experimental Setup & Fail-Stop Protocol
-* **Strict Evaluation Protocol**: Matched 30-view testing (10 temporal clips $\times$ 3 spatial crops, $256 \times 256$, 113,490 clips per model).
-* **Hardware & Compute**: 1 $\times$ NVIDIA RTX A5000 (24GB VRAM), ~100 GPU hours across all pipelines.
-* **Data Integrity**: VideoSSL canonical Split 1 (Xiao et al., WACV 2021; SHA256 verified).
-* **Engineering Hardening**:
-  * Removed recursive video loading fallback (enforced fail-stop exceptions).
-  * Auto-exporting git commit hash, seed=42, and hyperparameters to `run_config.json`.
+## Slide 4: The 5-Rung Experimental Ladder (30-View Protocol)
+| Run | Modality | Weights ($\beta,\gamma$) | Model Description | Best Top-1 | Final Top-1 | Top-5 | $\Delta$ vs. FixMatch |
+| :---: | :---: | :---: | :--- | :---: | :---: | :---: | :---: |
+| **A** | RGB | — | 100% Supervised Oracle | **72.91%** | — | 90.06% | +34.42% |
+| **B** | RGB | — | 10% Supervised Baseline | 31.32% | 30.80% | 54.11% | -7.17% |
+| **C** | RGB | $\tau=0.30$ | FixMatch RGB Baseline | 38.49% | 38.88% | 64.00% | *Reference* |
+| **D** | **RGB+TG** | **$\beta=0, \gamma=0$** | **Dual-Stream Control** | **59.03%** | **59.37%** | **82.90%** | **+20.54%** |
+| **F** | **RGB+TG** | $\beta=2, \gamma=1$ | Full $F^2$-FixMatch | **59.90%** | **60.35%** | **83.32%** | **+21.41%** |
+
+* **No Overfitting**: Final-epoch checkpoints match or exceed best-epoch checkpoints ($|\Delta| < 0.5\%$).
 
 ---
 
-## Slide 5: Main Benchmark Table (The 5-Rung Ladder)
-* **Run A (Supervised 100% Oracle)**: **72.91%** Top-1 | 90.06% Top-5
-* **Run B (Supervised 10% Baseline)**: **31.32%** Top-1 (Final: 30.80%) | 54.11% Top-5
-* **Run C (FixMatch RGB $\tau=0.30$)**: **38.49%** Top-1 (Final: 38.88%) | 64.00% Top-5
-* **Run D (Dual-Stream Control $\beta=0, \gamma=0$)**: **59.03%** Top-1 (Final: 59.37%) | 82.90% Top-5
-* **Run F (Full $F^2$-FixMatch)**: **59.90%** Top-1 (Final: 60.35%) | 83.32% Top-5
-* **Verification**: Final-epoch models perform equal or superior to test-selected models across all runs ($|\Delta| < 0.5\%$), ruling out test overfitting.
+## Slide 5: Core Ablation — Empirical Comparison (Run D vs. Full $F^2$)
+| Configuration / Metric | Our Reproduction | Tu et al. Published (Table 4) |
+| :--- | :---: | :---: |
+| Single-Stream Baseline | 38.49% (Run C) | 38.40% |
+| Frame Dual-Stream ($\beta=0, \gamma=0$) | 59.03% (Run D) | 67.90% (A1) |
+| Full $F^2$-FixMatch ($\beta=2, \gamma=1$) | 59.90% (Run F) | 71.10% (A4) |
+| **Dual-Stream Gain ($\Delta_{\text{dual}}$)** | **+20.54 pts (95.9%)** | **+29.50 pts (90.2%)** |
+| **Feature Module Delta ($\Delta_{\text{feat}}$)** | **+0.87 pts (4.1%)** | **+3.20 pts (9.8%)** |
+
+* **Statistical Context**: On $N=3{,}783$ test videos, 95% binomial margin is $\pm 1.56\%$ ($+0.87\% \approx 33$ videos).
+* **Compute Trade-Off**: Bypassing auxiliary TAP passes in Run D cuts training time by $\sim 15\%$ and lowers VRAM.
 
 ---
 
-## Slide 6: The Core Ablation: Disentanglement Attribution
-* **Mathematical Decomposition**: $\Delta_{\text{total}} = F - C = \Delta_{\text{dual}} + \Delta_{\text{feat}}$
-* **Integrated Dual-Stream Package ($\Delta_{\text{dual}} = D - C$)**:
-  * **+20.54 points** (**95.9%** of total SSL gain).
-  * Transitioning to the dual-stream framework (RGB+TG inputs, dual heads, ensembling) drives the empirical leap.
-* **Feature Consistency Module ($\Delta_{\text{feat}} = F - D$)**:
-  * **+0.87 points** (**4.1%** of total SSL gain) — statistically indistinguishable from evaluation noise.
-  * For $N=3,783$ test videos, $95\%$ margin of error is $\pm 1.56\%$ ($\sim 33$ videos); $+0.87\%$ is within the noise floor.
-* **Corroborated by Published Paper (Tu et al. Table 4)**:
-  * Paper's frame-level baseline A1 achieved 67.9% (+29.5 pts, 90.2% of gain); full A4 reached 71.1% (+3.2 pts).
-  * Paper swept $\beta, \gamma \in \{0.5, 1, 2, 3\}$ in Section 4.5, never testing the zero control ($\beta=0, \gamma=0$).
-* **Computation Cost vs. Return**:
-  * Disabling auxiliary TAP passes in Run D cuts training runtime by $\sim 15\%$ and reduces VRAM pressure.
-  * The extra training time and architectural complexity are not practically justified for a sub-noise return.
-  * In contrast, parameter-free PreciseBN delivers $+2.03\%$ on Run D and $+2.91\%$ on $F^2$ in $<2$ minutes.
+## Slide 6: Novel Extension 1 — Confidence Threshold ($\tau = 0.95$ vs. $0.30$)
+| Setting | Precision | Unlabeled Coverage ($N=8{,}584$) | Top-1 (30-View) | Top-5 |
+| :--- | :---: | :---: | :---: | :---: |
+| **FixMatch RGB ($\tau = 0.95$)** | **94.28%** | 41.54% (3,566 videos) | **36.93%** (Final: 37.09%) | 63.81% |
+| **FixMatch RGB ($\tau = 0.30$)** | 74.54% | **94.98%** (8,153 videos) | **38.49%** (Final: 38.88%) | 64.00% |
+| **Supervised 10% Ref** | — | — | 31.32% (Final: 30.80%) | 54.11% |
 
+* **Data Starvation**: Strict thresholding ($\tau = 0.95$) discards 58.5% of unlabeled videos, degrading Top-1 by **-1.56 pts**.
 
 ---
 
-## Slide 7: Extension 1: Confidence Threshold Ablation
-* **The 2D vs. 3D Question**: Standard FixMatch uses $\tau = 0.95$ on images; VideoSSL papers lowered $\tau \to 0.30$ without ablation.
-* **Physical Run C-$\tau$ (FixMatch RGB at $\tau = 0.95$)**:
-  * Reaches **36.93%** Top-1 (Final: 37.09%) vs. **38.49%** at $\tau = 0.30$ (**-1.56% drop**).
-* **The Mechanism (Data Starvation)**:
-  * At $\tau = 0.95$, precision is high (94.28%), but coverage plummets to 41.54% (discarding 58.5% of videos).
-  * At $\tau = 0.30$, coverage is 94.98% with 74.54% precision.
-* **Conclusion**: First published proof that video SSL benefits from lowering $\tau \to 0.30$; coverage outweighs label noise in 3D representations.
+## Slide 7: Novel Extension 2 — PreciseBN Recalibration
+* **Issue**: Shared `BatchNorm3d` layers drift across RGB and near-zero-mean Temporal Gradient passes.
+* **Method**: Freeze weights and re-estimate BN statistics on clean RGB clips (`recalibrate_bn.py`, $< 2\text{ min}$).
+
+| Model | Pre-Recalibration | Post-PreciseBN | Gain | Weight Changes |
+| :--- | :---: | :---: | :---: | :---: |
+| **Full $F^2$-FixMatch (Run F)** | 59.90% | **62.81%** | **+2.91 pts** | 0 (64/64 identical) |
+| **Dual-Stream Control (Run D)** | 59.03% | **61.06%** | **+2.03 pts** | 0 (64/64 identical) |
 
 ---
 
-## Slide 8: Extension 2: PreciseBN Recalibration Diagnostic
-* **The Mechanism**: Dual-stream models share `BatchNorm3d` layers across RGB and TG passes.
-* **The Problem**: TG has near-zero mean and high temporal variance; test inference uses clean RGB only.
-* **The Diagnostic**: Frozen weights + clean RGB forward pass to recalculate population mean and variance.
-* **The Result**: 30-view Top-1 surges from **59.90% to 62.81% (+2.91 pts)** with bitwise parameter invariance.
-* **Insight**: Confirms that cross-modal BatchNorm contamination was actively penalizing clean RGB evaluation.
+## Slide 8: Limitations
+1. **Residual Performance Gap**: An ~8-pt gap remains to the paper's 71.1% (multi-GPU distributed batch scaling & unreleased training details).
+2. **Single-Seed Budget**: Executed under a single random seed (`seed=42`) due to ~100 GPU-hour compute budget on RTX A5000.
+3. **Feature Module Margin vs. Noise**: Measured $+0.87\%$ gain sits within the $\pm 1.56\%$ binomial margin, leaving open whether it reflects modest regularization or finite-sample variance.
 
 ---
 
-## Slide 9: Failure Analysis & Proposal Evolution
-* **Failure Mode 1 (Pseudo-Label Noise)**: 25.5% incorrect pseudo-labels accepted at $\tau = 0.30$, but network shows high noise tolerance.
-* **Failure Mode 2 (Motionless Actions)**: Actions with static postures (e.g. *Hammering*: 3.0%, *Shotput*: 2.2%) lack TG motion gradients.
-* **Changes from Proposal (Compulsory Section)**:
-  * Dropped speculative per-class failure stories in favor of measured pseudo-label curves.
-  * Executed the missing control (Run D) and reported an **honest negative result** for P-Aug + MPL.
-  * Standardized all models onto the official 30-view multi-crop testing protocol.
-
----
-
-## Slide 10: Limitations, Conclusion & Deliverables
-* **Limitations**:
-  * An ~8-point gap remains to the paper's 71.1% (attributable to unreleased code details and LR scaling).
-  * Single seed (seed=42) due to ~100 GPU-hour budget constraints.
-* **Summary of Contributions**:
-  * Decoupled dual-stream inputs (+20.54 pts) from feature augmentations (+0.87 pts).
-  * Confirmed data starvation at $\tau = 0.95$ (-1.56 pts) vs. $\tau = 0.30$.
-  * Discovered +2.91% recovery via PreciseBN recalibration.
-* **Master Reproduction Link**:
-  * One-command reproduction: `bash run_all.sh` (or `run_all.bat` on Windows).
-  * Public GitHub Repository: [https://github.com/MankiratSingh-git/P24-CV](https://github.com/MankiratSingh-git/P24-CV)
+## Slide 9: Deliverables & Declaration
+* **One-Command Reproduction**: `bash run_all.sh` / `run_all.bat` ($< 3\text{ sec}$, 57/57 unit tests passing).
+* **Report & Code**: `docs/report.pdf` | `github.com/MankiratSingh-git/P24-CV`
+* **Authors**: **Mankirat Singh (1024160002)** & **Vanshika Garg (1024030092)**.
+* **AI Declaration**: Antigravity AI (DeepMind) assisted with diagnostic scripts, unit tests, formatting, and linting; all GPU runs and analyses were executed by the authors.
