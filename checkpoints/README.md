@@ -17,6 +17,6 @@ Per course submission rules, binary checkpoint files (`*.pth`, ~122 MB each) are
 | **PreciseBN** | Recalibrated $F^2$ | `f2_fixmatch_recal/best_model_precise_bn.pth` | `results/eval_f2_precise_bn_30view.json` | 62.81% Top-1 |
 
 ## External Checkpoint Download
-To download pre-trained weights for offline evaluation or verification, model weights are archived on Google Drive / Hugging Face:
-- Download Link: `[Archive URL to be inserted upon public release]`
+To download pre-trained weights for offline evaluation or verification, model weights are archived on Google Drive:
+- Download Link: https://drive.google.com/file/d/1nVRkXsHzRs2GUdQzgjSSh-67709w0w2-
 - Checkpoint MD5 hashes and parameter counts are verified in `results/synthesis_report.md`.
