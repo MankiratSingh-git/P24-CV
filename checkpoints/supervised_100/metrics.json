@@ -1,9 +1,14 @@
 {
-  "model": "Supervised Full Baseline (100% Labeled)",
-  "dataset": "UCF-101 Split 1 (100% Labeled)",
-  "best_epoch": 110,
-  "best_val_top1": 71.69,
-  "best_val_top5": 89.14,
+  "model": "Supervised Full Baseline (100% Labeled Oracle)",
+  "dataset": "UCF-101 Split 1 (100% Labeled, 9537 videos)",
+  "modality": "RGB",
+  "labeled_percent": 100,
+  "split": 1,
   "epochs": 120,
+  "best_epoch": 110,
+  "best_val_1crop_top1": 71.69,
+  "best_val_1crop_top5": 89.14,
+  "eval_30view_best_top1": 72.91,
+  "eval_30view_best_top5": 90.06,
   "checkpoint": "checkpoints/supervised_100/best_model.pth"
 }

@@ -1,8 +1,27 @@
 {
   "model": "F2-FixMatch (Bi-modal RGB + TG, P-Aug, MPL)",
   "dataset": "UCF-101 Split 1 (10% Labeled)",
+  "modality": "RGB + TG",
+  "labeled_percent": 10,
+  "split": 1,
+  "epochs": 220,
+  "warmup_epochs": 40,
+  "rampup_epochs": 30,
+  "loss_weights": {
+    "alpha": 2.0,
+    "beta": 2.0,
+    "gamma": 1.0
+  },
+  "threshold": 0.3,
   "best_epoch": 210,
-  "best_val_top1": 56.15,
+  "best_val_1crop_top1": 56.15,
+  "best_val_1crop_top5": 81.05,
+  "eval_30view_best_top1": 59.9,
+  "eval_30view_best_top5": 83.32,
+  "eval_30view_final_top1": 60.35,
+  "eval_30view_final_top5": 83.98,
+  "eval_30view_precise_bn_top1": 62.81,
+  "eval_30view_precise_bn_top5": 85.12,
   "total_training_hours": 17.26,
-  "checkpoint": "checkpoints/f2_fixmatch\\best_model.pth"
+  "checkpoint": "checkpoints/f2_fixmatch/best_model.pth"
 }

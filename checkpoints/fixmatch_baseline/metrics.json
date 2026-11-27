@@ -1,0 +1,18 @@
+{
+  "model": "FixMatch Baseline (RGB Only)",
+  "dataset": "UCF-101 Split 1 (10% Labeled)",
+  "modality": "RGB",
+  "labeled_percent": 10,
+  "split": 1,
+  "epochs": 220,
+  "warmup_epochs": 40,
+  "threshold": 0.3,
+  "best_epoch": 215,
+  "best_val_1crop_top1": 37.85,
+  "best_val_1crop_top5": 63.12,
+  "eval_30view_best_top1": 38.49,
+  "eval_30view_best_top5": 64.0,
+  "eval_30view_final_top1": 38.88,
+  "eval_30view_final_top5": 64.34,
+  "checkpoint": "checkpoints/fixmatch_baseline/best_model.pth"
+}

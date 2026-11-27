@@ -1,0 +1,17 @@
+{
+  "model": "Supervised Baseline (10% Labeled Data Only)",
+  "dataset": "UCF-101 Split 1 (10% Labeled)",
+  "modality": "RGB",
+  "labeled_percent": 10,
+  "split": 1,
+  "epochs": 120,
+  "warmup_epochs": 10,
+  "best_epoch": 115,
+  "best_val_1crop_top1": 30.19,
+  "best_val_1crop_top5": 53.69,
+  "eval_30view_best_top1": 31.32,
+  "eval_30view_best_top5": 54.11,
+  "eval_30view_final_top1": 30.8,
+  "eval_30view_final_top5": 53.63,
+  "checkpoint": "checkpoints/supervised_baseline/best_model.pth"
+}
