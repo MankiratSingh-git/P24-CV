@@ -10,7 +10,7 @@
 * **Team Members**:
   * **Mankirat Singh** (`1024160002`)
   * **Vanshika Garg** (`1024030092`)
-* **Repository**: `github.com/MankiratSingh-git/P24-CV` (`bash run_all.sh` / `run_all.bat`)
+* **Repository**: `github.com/itsmankirat/P24-CV` (`bash run_all.sh` / `run_all.bat`)
 
 ---
 
@@ -97,6 +97,6 @@
 
 ## Slide 9: Deliverables & Declaration
 * **One-Command Reproduction**: `bash run_all.sh` / `run_all.bat` ($< 3\text{ sec}$, 57/57 unit tests passing).
-* **Report & Code**: `docs/report.pdf` | `github.com/MankiratSingh-git/P24-CV`
+* **Report & Code**: `docs/report.pdf` | `github.com/itsmankirat/P24-CV`
 * **Authors**: **Mankirat Singh (1024160002)** & **Vanshika Garg (1024030092)**.
 * **AI Declaration**: Antigravity AI (DeepMind) assisted with diagnostic scripts, unit tests, formatting, and linting; all GPU runs and analyses were executed by the authors.

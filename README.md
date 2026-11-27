@@ -141,7 +141,7 @@ All training and evaluation runs were executed on a dedicated GPU workstation:
 
 ### 6.1 Installation
 ```bash
-git clone https://github.com/MankiratSingh-git/P24-CV.git
+git clone https://github.com/itsmankirat/P24-CV.git
 cd P24-CV
 
 # Create virtual environment
