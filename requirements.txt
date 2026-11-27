@@ -1,12 +1,18 @@
-# Core Deep Learning & Computer Vision
-# For CUDA-accelerated PyTorch: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# CUDA 12.4 PyTorch Wheel Index (installs CUDA-enabled torch & torchvision automatically)
+--extra-index-url https://download.pytorch.org/whl/cu124
+
+# Core Deep Learning & GPU/CUDA Acceleration
 torch>=2.4.0
 torchvision>=0.19.0
+
+# Video Decoding, Image Processing & Scientific Computing
 opencv-python>=4.8.0
 pillow>=10.0.0
 numpy>=1.24.0
+
+# Diagnostics & Plotting
 matplotlib>=3.7.0
 
-# Progress Tracking & Dataset Ingestion
+# Utilities & Dataset Ingestion
 tqdm>=4.65.0
 requests>=2.28.0
