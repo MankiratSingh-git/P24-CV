@@ -169,90 +169,28 @@ The official split annotations reside in `data/splits/`. Verified split files in
 
 ### Pipeline 1: Supervised 10% Baseline (Run B)
 ```bash
-python train_supervised_baseline.py \
-  --data-root data/ucf101 \
-  --splits-dir data/splits \
-  --labeled-percent 10 \
-  --split 1 \
-  --batch-size 4 \
-  --accum-steps 2 \
-  --epochs 120 \
-  --lr 0.2 \
-  --seed 42 \
-  --output-dir checkpoints/supervised_baseline
+python train_supervised_baseline.py --data-root data/ucf101 --splits-dir data/splits --labeled-percent 10 --split 1 --batch-size 4 --accum-steps 2 --epochs 120 --lr 0.2 --seed 42 --output-dir checkpoints/supervised_baseline
 ```
 
 ### Pipeline 2: FixMatch RGB Baseline (Run C, $\tau=0.30$)
 ```bash
-python train_fixmatch_baseline.py \
-  --data-root data/ucf101 \
-  --splits-dir data/splits \
-  --split 1 \
-  --batch-size 4 \
-  --accum-steps 2 \
-  --mu 4 \
-  --epochs 220 \
-  --lr 0.2 \
-  --threshold 0.3 \
-  --seed 42 \
-  --output-dir checkpoints/fixmatch_baseline
+python train_fixmatch_baseline.py --data-root data/ucf101 --splits-dir data/splits --split 1 --batch-size 4 --accum-steps 2 --mu 4 --epochs 220 --lr 0.2 --threshold 0.3 --seed 42 --output-dir checkpoints/fixmatch_baseline
 ```
 
 ### Pipeline 3: FixMatch Confidence Threshold Ablation (Run C-$\tau$, $\tau=0.95$)
 ```bash
-python train_fixmatch_baseline.py \
-  --data-root data/ucf101 \
-  --splits-dir data/splits \
-  --split 1 \
-  --batch-size 4 \
-  --accum-steps 2 \
-  --mu 4 \
-  --epochs 220 \
-  --lr 0.2 \
-  --threshold 0.95 \
-  --seed 42 \
-  --output-dir checkpoints/fixmatch_tau_095
+python train_fixmatch_baseline.py --data-root data/ucf101 --splits-dir data/splits --split 1 --batch-size 4 --accum-steps 2 --mu 4 --epochs 220 --lr 0.2 --threshold 0.95 --seed 42 --output-dir checkpoints/fixmatch_tau_095
 ```
 
 ### Pipeline 4: Dual-Stream FixMatch Control (Run D, $\beta=0.0, \gamma=0.0$)
 ```bash
-python train_f2_fixmatch.py \
-  --data-root data/ucf101 \
-  --splits-dir data/splits \
-  --split 1 \
-  --batch-size 4 \
-  --accum-steps 2 \
-  --mu 4 \
-  --epochs 220 \
-  --lr 0.2 \
-  --threshold 0.3 \
-  --alpha 2.0 \
-  --beta 0.0 \
-  --gamma 0.0 \
-  --seed 42 \
-  --output-dir checkpoints/fixmatch_rgb_tg
+python train_f2_fixmatch.py --data-root data/ucf101 --splits-dir data/splits --split 1 --batch-size 4 --accum-steps 2 --mu 4 --epochs 220 --lr 0.2 --threshold 0.3 --alpha 2.0 --beta 0.0 --gamma 0.0 --seed 42 --output-dir checkpoints/fixmatch_rgb_tg
 ```
 
 ### Pipeline 5: Full $F^2$-FixMatch (Run F, $\beta=2.0, \gamma=1.0$)
 ```bash
-python train_f2_fixmatch.py \
-  --data-root data/ucf101 \
-  --splits-dir data/splits \
-  --split 1 \
-  --batch-size 4 \
-  --accum-steps 2 \
-  --mu 4 \
-  --epochs 220 \
-  --lr 0.2 \
-  --threshold 0.3 \
-  --alpha 2.0 \
-  --beta 2.0 \
-  --gamma 1.0 \
-  --seed 42 \
-  --output-dir checkpoints/f2_fixmatch
+python train_f2_fixmatch.py --data-root data/ucf101 --splits-dir data/splits --split 1 --batch-size 4 --accum-steps 2 --mu 4 --epochs 220 --lr 0.2 --threshold 0.3 --alpha 2.0 --beta 2.0 --gamma 1.0 --seed 42 --output-dir checkpoints/f2_fixmatch
 ```
-
----
 
 ## 8. Artifact & Log Registry
 
